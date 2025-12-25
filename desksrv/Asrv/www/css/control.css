@@ -1,0 +1,246 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    background-color: #1e1e1e;
+    font-family: "Consolas", "Monaco", monospace;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    height: 100vh;
+    overflow: hidden;
+    /* 给左侧菜单留出空间 */
+    margin-left: 0;
+    transition: margin-left 0.3s ease;
+}
+/* 左侧垂直菜单样式 */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -200px; /* 初始隐藏，只露出触发按钮 */
+    width: 200px;
+    height: 100vh;
+    background-color: #2c2c2c;
+    border-right: 1px solid #333;
+    z-index: 99999;
+    transition: left 0.3s ease;
+    padding: 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.sidebar.show {
+    left: 0; /* 显示菜单 */
+}
+.sidebar-toggle {
+    position: absolute;
+    top: 50%;
+    right: -30px;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 60px;
+    background-color: #007acc;
+    color: #fff;
+    border: none;
+    border-radius: 0 5px 5px 0;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sidebar-menu-item {
+    color: #fff;
+    padding: 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.sidebar-menu-item:hover {
+    background-color: #007acc;
+}
+/* 比例调节控件样式 */
+.ratio-control {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: #2c2c2c;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+}
+.ratio-control label {
+    font-size: 12px;
+}
+.ratio-control input {
+    width: 200px;
+}
+.panel-container {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    height: 100%;
+}
+.panel {
+    border: 1px solid #333;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    transition: flex 0.2s ease; /* 比例调整时的过渡动画 */
+}
+.screen {
+    flex: 7;
+}
+.bash{
+    flex: 3;
+}
+/* 面板分隔条样式（支持拖拽调整比例） */
+.panel-splitter {
+    width: 6px;
+    background-color: #007acc;
+    cursor: col-resize;
+    border-radius: 3px;
+    height: 100%;
+    transition: background-color 0.2s;
+}
+.panel-splitter:hover {
+    background-color: #005f99;
+}
+.panel-header {
+    background-color: #333;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    flex-shrink: 0;
+}
+.fullscreen-btn {
+    background-color: #007acc;
+    color: #fff;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+}
+.fullscreen-btn:hover {
+    background-color: #005f99;
+}
+.panel-content {
+    flex: 1;
+    overflow: hidden;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+}
+/* Bash终端样式 */
+#terminal {
+    flex: 1;
+    padding: 10px;
+    color: #fff;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+#input-area {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-top: 1px solid #333;
+    background-color: #000;
+    flex-shrink: 0;
+}
+#prompt {
+    color: #00ff00;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+#cmd-input {
+    flex: 1;
+    background-color: #000;
+    color: #fff;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 5px 0;
+}
+/* 屏幕流样式 */
+#screen-stream {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+/* 全屏样式 */
+.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999;
+    margin: 0;
+    gap: 0;
+}
+/* 优化滚动条样式 */
+#terminal::-webkit-scrollbar {
+    width: 8px;
+}
+#terminal::-webkit-scrollbar-track {
+    background: #222;
+}
+#terminal::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+#terminal::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+/* 新增：通知输入框样式 */
+.notify-input-area {
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-top: 1px solid #333;
+    background-color: #000;
+    flex-shrink: 0;
+    gap: 8px;
+}
+#notify-input {
+    flex: 1;
+    background-color: #1e1e1e;
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 3px;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 5px 8px;
+    max-length: 50;
+}
+#notify-btn {
+    background-color: #007acc;
+    color: #fff;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+}
+#notify-btn:hover {
+    background-color: #005f99;
+}
+.xterm-info { color: #4CAF50; }
+.xterm-error { color: #F44336; }
+.xterm-output { color: #E0E0E0; }
+#terminal { background-color: #1E1E1E; }

@@ -1,0 +1,23 @@
+[Unit]
+Description=Desktop Monitor
+After=graphical.target
+Requires=graphical.target
+
+[Service]
+# Type=forking 会告诉 systemd 等待子进程完全启动后再标记服务为 “运行中”，避免误判进程退出。
+Type=forking
+User=%USER%
+Group=%USER%
+WorkingDirectory=/home/%USER%
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=%h/.Xauthority"
+Environment="QT_PLUGIN_PATH=%APP_PATH%/plugins:$QT_PLUGIN_PATH"
+Environment="LD_LIBRARY_PATH=%APP_PATH%/lib:$LD_LIBRARY_PATH"
+ExecStart=/usr/bin/monitor
+StandardOutput=append:/data/logs/monitor/stdout.log
+StandardError=append:/data/logs/monitor/stderr.log
+Restart=on-failure
+#Restart=no
+RestartSec=5
+[Install]
+WantedBy=graphical.target

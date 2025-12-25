@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>远程屏幕控制</title>
+    <!-- 引入CSS -->
+    <link rel="stylesheet" href="/css/screen_ctrl.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 连接状态提示 -->
+        <div id="status" class="status offline">未连接</div>
+        <!-- 屏幕渲染区域 -->
+        <div class="screen-container">
+            <canvas id="screenCanvas"></canvas>
+        </div>
+        <!-- 系统按键面板 -->
+       <div class="keyboard-panel">
+           <!-- 单个系统按键 -->
+           <div class="single-keys">
+               <button class="key-btn" data-key="win">Win键</button>
+               <button class="key-btn" data-key="alt">Alt键</button>
+               <button class="key-btn" data-key="ctrl">Ctrl键</button>
+               <button class="key-btn" data-key="shift">Shift键</button>
+               <button class="key-btn" data-key="esc">ESC键</button>
+           </div>
+
+           <!-- 常用系统快捷键 -->
+           <div class="shortcut-group">
+               <button class="key-btn" data-shortcut="alt+tab">Alt+Tab</button>
+               <button class="key-btn" data-shortcut="ctrl+alt+del">Ctrl+Alt+Del</button>
+               <button class="key-btn" data-shortcut="win+d">Win+D</button>
+               <button class="key-btn" data-shortcut="win+e">Win+E</button>
+               <button class="key-btn" data-shortcut="win+r">Win+R</button>
+           </div>
+
+           <!-- 功能按键 -->
+           <div class="function-keys">
+               <button class="key-btn" data-key="enter">回车</button>
+               <button class="key-btn" data-key="tab">Tab</button>
+               <button class="key-btn" data-key="backspace">退格</button>
+               <button class="key-btn" data-key="delete">删除</button>
+           </div>
+
+           <!-- 方向键 -->
+           <div class="arrow-keys">
+               <button class="key-btn" data-key="arrowup">↑</button>
+               <button class="key-btn" data-key="arrowdown">↓</button>
+               <button class="key-btn" data-key="arrowleft">←</button>
+               <button class="key-btn" data-key="arrowright">→</button>
+           </div>
+       </div>
+    </div>
+
+    <!-- 引入JS -->
+    <script src="/js/screen_ctrl.js"></script>
+</body>
+</html>

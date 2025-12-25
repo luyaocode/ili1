@@ -1,0 +1,215 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f8f9fa;
+    display: flex;
+    gap: 20px;
+    transition: all 0.3s ease;
+}
+/* 左侧文件列表：默认100%宽度，点击文件后缩为40% */
+.file-panel {
+    width: 100%;
+    height: calc(100vh - 40px);
+    overflow-y: auto;
+    transition: width 0.3s ease;
+}
+/* 右侧预览区：默认隐藏 */
+.preview-panel {
+    width: 0;
+    height: calc(100vh - 40px);
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 0;
+    overflow-y: auto;
+    position: relative;
+    transition: width 0.3s ease, padding 0.3s ease;
+}
+.preview-panel.show {
+    width: 60%;
+    padding: 15px;
+}
+.preview-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #7f8c8d;
+    font-size: 1.1em;
+    text-align: center;
+    display: none;
+}
+.preview-panel.show .preview-placeholder {
+    display: block;
+}
+.path-bar {
+    margin: 0 0 10px 0;
+    padding: 8px 10px;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: flex; /* 关键：启用Flex布局 */
+    align-items: center; /* 垂直居中对齐子元素（可选，提升美观度） */
+}
+.file-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.file-item {
+    padding: 4px 12px;
+    margin: 3px 0;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+.file-item:hover {
+    background-color: #e3f2fd;
+}
+.file-item a {
+    text-decoration: none;
+    color: #1976d2;
+    flex: 1;
+    /* 恢复a标签原生点击能力 */
+    pointer-events: auto;
+}
+.file-item a:hover {
+    text-decoration: underline;
+}
+.file-modify-time {
+    width: 180px;  /* 固定宽度，保证排版整齐 */
+    text-align: right;
+    margin-right: 16px;
+    color: #666;
+}
+.file-size {
+    width: 100px;  /* 固定宽度，保证排版整齐 */
+    text-align: right;
+    margin-right: 16px;
+    color: #666;
+}
+.dir-icon {
+    color: #ff9800;
+    font-weight: bold;
+}
+.file-icon {
+    color: #2196f3;
+}
+.preview-content {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: monospace;
+    color: #2c3e50;
+}
+.preview-unsupported {
+    color: #e74c3c;
+    text-align: center;
+    padding: 20px;
+}
+.download-btn {
+    /* 文本浅蓝色（有效取值，可根据需求调整色值） */
+    color: #87ceeb;
+    /* 透明背景 */
+    background-color: transparent;
+    /* 字体大小 */
+    font-size: 0.9em;
+    /* 左边距 */
+    margin-left: 2px;
+    /* 无边框 */
+    border: none;
+    /* 去掉按钮默认的外边框（点击时的焦点框） */
+    outline: none;
+    /* 鼠标悬浮时显示手型 */
+    cursor: pointer;
+    /* 去掉按钮默认的内边距（可选，根据布局调整） */
+    padding: 0;
+    /* 让下划线与文本对齐更美观 */
+    text-decoration: none;
+    /* 过渡效果：颜色变化更丝滑 */
+    transition: color 0.2s ease;
+}
+
+/* 鼠标悬浮状态 */
+.download-btn:hover {
+    /* 文本变深蓝色 */
+    color: #0066cc; /* 可替换为 darkblue / #1e40af 等深蓝值 */
+    /* 文本下方添加下划线 */
+    text-decoration: underline;
+}
+
+/* 可选：去掉按钮点击时的焦点样式（提升美观度） */
+.download-btn:focus {
+    outline: none;
+}
+
+.upload-btn {
+    color: #7f8c8d;
+    /* 透明背景 */
+    background-color: transparent;
+    /* 字体大小 */
+    font-size: 0.9em;
+    /* 左边距 */
+    margin-left: 2px;
+    /* 无边框 */
+    border: none;
+    /* 去掉按钮默认的外边框（点击时的焦点框） */
+    outline: none;
+    /* 鼠标悬浮时显示手型 */
+    cursor: pointer;
+    /* 去掉按钮默认的内边距（可选，根据布局调整） */
+    padding: 0;
+    /* 让下划线与文本对齐更美观 */
+    text-decoration: none;
+    /* 过渡效果：颜色变化更丝滑 */
+    transition: color 0.2s ease;
+    margin-left: auto; /* 关键：自动填充左侧空间，实现右对齐 */
+}
+
+/* 鼠标悬浮状态 */
+.upload-btn:hover {
+    /* 文本变深蓝色 */
+    color: #ee5500;
+    /* 文本下方添加下划线 */
+    text-decoration: underline;
+}
+
+/* 可选：去掉按钮点击时的焦点样式（提升美观度） */
+.upload-btn:focus {
+    outline: none;
+}
+
+/* 上传提示样式（可选） */
+.upload-tip {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.9em;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.upload-tip.show {
+    opacity: 1;
+}
+
+.upload-success {
+    background-color: #4caf50;
+}
+
+.upload-error {
+    background-color: #f44336;
+}

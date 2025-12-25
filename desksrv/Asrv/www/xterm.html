@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Xterm + WebSocket 终端（二进制版）</title>
+  <link rel="stylesheet" href="/css/xterm.css">
+  <script src="/js/xterm.min.js"></script>
+  <style>
+    /* 终端输出样式区分 */
+    .xterm-info { color: #4CAF50; }
+    .xterm-error { color: #F44336; }
+    .xterm-output { color: #E0E0E0; }
+    #terminal { background-color: #1E1E1E; }
+  </style>
+</head>
+<body>
+  <div id="terminal" style="width: 800px; height: 400px; border: 1px solid #000;"></div>
+
+  <script src="/js/xtermpage.js"></script>
+</body>
+</html>
+

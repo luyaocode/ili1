@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" binding="early" xmlns:qt="http://www.qt.io/2015/02/scxml-ext" name="ImageProcess" qt:editorversion="4.5.2" datamodel="cplusplus:ImageProcessDataModel:ImageProcessDataModel.h" initial="Idle">
+    <qt:editorinfo initialGeometry="149.33;111.49;-20;-20;40;40"/>
+    <state id="Idle">
+        <qt:editorinfo scenegeometry="367.19;111.49;307.19;61.49;120;100" geometry="367.19;111.49;-60;-50;120;100"/>
+        <transition type="external" event="startProcess" target="Processing">
+            <qt:editorinfo movePoint="-53.18;2.05"/>
+            <assign location="imagePath" expr="setImagePath(_event.data.value(&quot;imagePath&quot;).toString())"/>
+            <assign location="processProgress" expr="resetProgress()"/>
+            <assign location="processResult" expr="QString()"/>
+        </transition>
+    </state>
+    <state id="Processing">
+        <qt:editorinfo scenegeometry="367.19;296.61;307.19;246.61;120;100" geometry="367.19;296.61;-60;-50;120;100"/>
+        <onentry>
+            <script>startProgressTimer()</script>
+        </onentry>
+        <onexit>
+            <script>stopProgressTimer()</script>
+        </onexit>
+        <transition type="external" event="cancelProcess" target="Idle">
+            <qt:editorinfo movePoint="75.69;0"/>
+            <assign location="processResult" expr="QString(&quot;取消处理&quot;)"/>
+        </transition>
+        <transition type="external" event="finish" target="Completed">
+            <qt:editorinfo movePoint="6.14;8.18"/>
+            <assign location="processResult" expr="QString(&quot;处理成功&quot;)"/>
+        </transition>
+    </state>
+    <state id="Completed">
+        <qt:editorinfo scenegeometry="149.33;296.61;89.33;246.61;120;100" geometry="149.33;296.61;-60;-50;120;100"/>
+        <transition type="external" event="reset" target="Idle">
+            <qt:editorinfo movePoint="-7.16;16.36"/>
+        </transition>
+    </state>
+</scxml>

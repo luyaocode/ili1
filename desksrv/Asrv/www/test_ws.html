@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 服务器状态检测</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" type="image/svg+xml">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .config-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #409eff;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #409eff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background-color: #337ecc;
+        }
+
+        .btn:disabled {
+            background-color: #909399;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 16px;
+            display: none;
+        }
+
+        .success {
+            background-color: #f0f9ff;
+            color: #67c23a;
+            border: 1px solid #e1f3d8;
+        }
+
+        .error {
+            background-color: #fef0f0;
+            color: #f56c6c;
+            border: 1px solid #fbc4c4;
+        }
+
+        .loading {
+            background-color: #f5f7fa;
+            color: #909399;
+            border: 1px solid #e4e7ed;
+        }
+
+        .tips {
+            margin-top: 15px;
+            color: #909399;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket 服务器状态检测</h1>
+
+        <div class="config-group">
+            <label for="wsIp">服务器IP地址</label>
+            <input type="text" id="wsIp" placeholder="留空则检测 127.0.0.1，例：192.168.1.100">
+        </div>
+
+        <div class="config-group">
+            <label for="wsPort">服务器端口</label>
+            <input type="number" id="wsPort" placeholder="输入WS服务器端口，例：8080" value="8081">
+        </div>
+
+        <div class="config-group">
+            <label for="timeout">超时时间(毫秒)</label>
+            <input type="number" id="timeout" placeholder="连接超时时间，默认3000" value="3000">
+        </div>
+
+        <button class="btn" id="checkBtn">检测服务器状态</button>
+        <button class="btn" id="autoCheckBtn" style="margin-top: 10px; background-color: #67c23a;">开启自动检测(5秒/次)</button>
+        <button class="btn" id="stopAutoCheckBtn" style="margin-top: 10px; background-color: #f56c6c; display: none;">停止自动检测</button>
+
+        <div class="status" id="statusBox"></div>
+
+        <div class="tips">
+            提示：1. 若后端监听0.0.0.0，前端可填127.0.0.1或本机内网IP<br>
+            2. 检测成功后会自动关闭临时连接，仅用于状态验证
+        </div>
+    </div>
+
+    <script src="/js/test_ws.js"></script>
+</body>
+</html>

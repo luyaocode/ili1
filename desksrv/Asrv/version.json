@@ -1,0 +1,10 @@
+{
+    "currentVersion": "1.0.0",
+    "latestVersion": "1.0.1",
+    "updateTitle": "V1.0.1 更新说明",
+    "updateContent": [
+        "1. 修复特殊符号无法输入的问题",
+        "2. 修复无法长按鼠标按键的问题"
+    ],
+    "forceUpdate": false
+}

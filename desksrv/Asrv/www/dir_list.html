@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>文件浏览器 - {{DIR_PATH}}</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" type="image/svg+xml">
+    <link rel="stylesheet" href="/css/style.css"  type="text/css">
+    <style>
+
+
+    </style>
+</head>
+<body>
+    <div class="file-panel" id="filePanel">
+        <div class="path-bar">
+            <strong>{{REQUEST_PATH}}</strong>
+            <button class="upload-btn">上传文件</button>
+            <!-- 隐藏的文件选择输入框 -->
+            <input type="file" id="fileUploadInput" style="display: none;" multiple>
+        </div>
+        <ul class="file-list">
+            {{PARENT_DIR}}
+            {{FILE_LIST}}
+        </ul>
+    </div>
+
+    <div class="preview-panel" id="previewPanel">
+        <div class="preview-placeholder">点击左侧文件查看内容预览</div>
+    </div>
+
+    <script src="/js/file_browser.js"></script>
+</body>
+</html>

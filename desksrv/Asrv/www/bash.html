@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Bash 终端</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" type="image/svg+xml">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 14px;
+            padding: 20px;
+        }
+        #terminal {
+            width: 800px;
+            height: 600px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #000;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        #input-area {
+            display: flex;
+            align-items: center;
+            width: 800px;
+        }
+        #prompt {
+            color: #00ff00;
+            margin-right: 8px;
+        }
+        #cmd-input {
+            flex: 1;
+            background-color: #000;
+            color: #fff;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+            padding: 5px 0;
+        }
+        .output {
+            margin: 2px 0;
+            white-space: pre-line; /* 核心属性：解析 \n 为换行，忽略多余空格 */
+        }
+        .error {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal"></div>
+    <div id="input-area">
+        <span id="prompt">$</span>
+        <input type="text" id="cmd-input" placeholder="输入Shell命令，按回车执行（exit退出）">
+    </div>
+
+    <script src="/js/bash.js"></script>
+</body>
+</html>
