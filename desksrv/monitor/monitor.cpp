@@ -44,7 +44,7 @@ Monitor::Monitor(InputWatcher *inputWatcher, QObject *parent)
     // 连接用户活动信号
     connect(m_inputWatcher, &InputWatcher::userActivityDetected, this, &Monitor::onUserActivity);
 
-    setScheduledTask();
+//    setScheduledTask();
 }
 
 bool Monitor::start()

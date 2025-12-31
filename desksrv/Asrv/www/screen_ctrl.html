@@ -4,56 +4,104 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>远程屏幕控制</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>" type="image/svg+xml">
     <!-- 引入CSS -->
     <link rel="stylesheet" href="/css/screen_ctrl.css">
+    <link rel="stylesheet" href="/css/control.css"  type="text/css">
+    <link rel="stylesheet" href="/css/xterm.css"  type="text/css">
+    <script src="/js/xterm.min.js"></script>
+
 </head>
 <body>
-    <div class="container">
-        <!-- 连接状态提示 -->
-        <div id="status" class="status offline">未连接</div>
-        <!-- 屏幕渲染区域 -->
-        <div class="screen-container">
-            <canvas id="screenCanvas"></canvas>
-        </div>
-        <!-- 系统按键面板 -->
-       <div class="keyboard-panel">
-           <!-- 单个系统按键 -->
-           <div class="single-keys">
-               <button class="key-btn" data-key="win">Win键</button>
-               <button class="key-btn" data-key="alt">Alt键</button>
-               <button class="key-btn" data-key="ctrl">Ctrl键</button>
-               <button class="key-btn" data-key="shift">Shift键</button>
-               <button class="key-btn" data-key="esc">ESC键</button>
-           </div>
-
-           <!-- 常用系统快捷键 -->
-           <div class="shortcut-group">
-               <button class="key-btn" data-shortcut="alt+tab">Alt+Tab</button>
-               <button class="key-btn" data-shortcut="ctrl+alt+del">Ctrl+Alt+Del</button>
-               <button class="key-btn" data-shortcut="win+d">Win+D</button>
-               <button class="key-btn" data-shortcut="win+e">Win+E</button>
-               <button class="key-btn" data-shortcut="win+r">Win+R</button>
-           </div>
-
-           <!-- 功能按键 -->
-           <div class="function-keys">
-               <button class="key-btn" data-key="enter">回车</button>
-               <button class="key-btn" data-key="tab">Tab</button>
-               <button class="key-btn" data-key="backspace">退格</button>
-               <button class="key-btn" data-key="delete">删除</button>
-           </div>
-
-           <!-- 方向键 -->
-           <div class="arrow-keys">
-               <button class="key-btn" data-key="arrowup">↑</button>
-               <button class="key-btn" data-key="arrowdown">↓</button>
-               <button class="key-btn" data-key="arrowleft">←</button>
-               <button class="key-btn" data-key="arrowright">→</button>
-           </div>
-       </div>
+    <!-- 左侧垂直菜单 -->
+    <div class="sidebar" id="sidebar">
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        <div class="sidebar-menu-item">资源</div>
+        <div class="sidebar-menu-item">设置</div>
     </div>
 
+    <!-- 比例调节控件 -->
+    <div class="ratio-control">
+        <label for="ratioSlider">面板比例：</label>
+        <input type="range" id="ratioSlider" min="1" max="9" value="8">
+        <span id="ratioText">8:2</span>
+    </div>
+
+    <!-- 面板容器（包含分隔条） -->
+    <div class="panel-container" id="panelContainer">
+        <!-- 屏幕监控面板 -->
+        <div class="panel screen" id="screen-panel">
+            <div class="panel-header">
+<!--                <span>实时屏幕</span>-->
+            </div>
+            <div class="panel-content">
+            <div class="container">
+                <!-- 连接状态提示 -->
+                <div id="status" class="status offline">未连接</div>
+                <!-- 屏幕渲染区域 -->
+                <div class="screen-container">
+                    <canvas id="screenCanvas"></canvas>
+                </div>
+                <!-- 系统按键面板 -->
+               <div class="keyboard-panel">
+                   <!-- 单个系统按键 -->
+                   <div class="single-keys">
+                       <button class="key-btn" data-key="win">Win键</button>
+        <!--               <button class="key-btn" data-key="alt">Alt键</button>
+                       <button class="key-btn" data-key="ctrl">Ctrl键</button>
+                       <button class="key-btn" data-key="shift">Shift键</button>
+                       <button class="key-btn" data-key="esc">ESC键</button>-->
+                   </div>
+
+                   <!-- 常用系统快捷键 -->
+                   <div class="shortcut-group">
+                       <button class="key-btn" data-shortcut="alt+tab">Alt+Tab</button>
+        <!--               <button class="key-btn" data-shortcut="ctrl+alt+del">Ctrl+Alt+Del</button>
+                       <button class="key-btn" data-shortcut="win+d">Win+D</button>
+                       <button class="key-btn" data-shortcut="win+e">Win+E</button>
+                       <button class="key-btn" data-shortcut="win+r">Win+R</button>-->
+                   </div>
+
+                   <!-- 功能按键 -->
+        <!--           <div class="function-keys">
+                       <button class="key-btn" data-key="enter">回车</button>
+                       <button class="key-btn" data-key="tab">Tab</button>
+                       <button class="key-btn" data-key="backspace">退格</button>
+                       <button class="key-btn" data-key="delete">删除</button>
+                   </div>-->
+
+                   <!-- 方向键 -->
+        <!--           <div class="arrow-keys">
+                       <button class="key-btn" data-key="arrowup">↑</button>
+                       <button class="key-btn" data-key="arrowdown">↓</button>
+                       <button class="key-btn" data-key="arrowleft">←</button>
+                       <button class="key-btn" data-key="arrowright">→</button>
+                   </div>-->
+               </div>
+            </div>
+            </div>
+            <div class="notify-input-area">
+                <input type="text" id="notify-input" placeholder="输入通知内容（最多50字符）" maxlength="50">
+                <button id="notify-btn">发送通知</button>
+            </div>
+        </div>
+
+        <!-- 面板分隔条（拖拽调整比例） -->
+        <div class="panel-splitter" id="panelSplitter"></div>
+
+        <!-- Bash终端面板 -->
+        <div class="panel bash" id="bash-panel">
+            <div class="panel-header">
+<!--                <span>Bash终端</span>-->
+            </div>
+            <div class="panel-content">
+                <div id="terminal"></div>
+            </div>
+        </div>
+    </div>
     <!-- 引入JS -->
     <script src="/js/screen_ctrl.js"></script>
+    <script src="/js/xtermpage.js"></script>
+    <script src="/js/control.js"></script>
 </body>
 </html>

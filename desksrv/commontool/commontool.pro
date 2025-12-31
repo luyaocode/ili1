@@ -11,6 +11,16 @@ TEMPLATE = lib
 
 DEFINES += COMMONTOOL_LIBRARY
 
+CONFIG(debug, debug|release) {
+    # Debug 模式专属宏
+    DEFINES += DEBUG
+    message(当前编译模式: debug)
+} else {
+    # Release 模式专属宏
+    DEFINES += RELEASE
+    message(当前编译模式: release)
+}
+
 # The following define makes your compiler emit warnings if you use
 # any feature of Qt which has been marked as deprecated (the exact warnings
 # depend on your compiler). Please consult the documentation of the
@@ -33,7 +43,8 @@ SOURCES += \
     mousesimulator.cpp \
     virtualmousewidget.cpp \
     VersionManager.cpp \
-    UpdateDialog.cpp
+    UpdateDialog.cpp \
+    screenshooter.cpp
 
 HEADERS += \
         commontool.h \
@@ -46,9 +57,12 @@ HEADERS += \
     mousesimulator.h \
     virtualmousewidget.h \
     VersionManager.h \
-    UpdateDialog.h
+    UpdateDialog.h \
+    drmstruct.h \
+    screenshooter.h \
+    globaldef.h
 
-LIBS += -lX11 -lXtst -lpthread
+LIBS += -lX11 -lXtst -ldrm -lpthread
 
 DESTDIR =  $$(HOME)/target_dir/desksrv
 # 不存在目标目录就先创建

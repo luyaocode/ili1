@@ -3,9 +3,11 @@
 #include <QDebug>
 #include "virtualmousewidget.h"
 #include "x11struct.h"
+#include "globaldef.h"
 
 // 静态单例初始化
 MouseSimulator *MouseSimulator::m_instance = nullptr;
+QMutex          MouseSimulator::m_mutex;
 
 MouseSimulator::MouseSimulator(QObject *parent): QObject(parent)
 {
@@ -55,6 +57,7 @@ MouseSimulator::~MouseSimulator()
 
 MouseSimulator *MouseSimulator::getInstance()
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_instance)
     {
         m_instance = new MouseSimulator();
@@ -73,22 +76,25 @@ void MouseSimulator::deleteInstance()
 
 bool MouseSimulator::moveMouse(int x, int y)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
     // XTest模拟绝对移动（0号鼠标设备）
     XTestFakeMotionEvent(m_x11struct->m_x11Display, 0, x, y, CurrentTime);
     XFlush(m_x11struct->m_x11Display);  // 立即刷新事件队列，确保生效
-                                        //    // 同步更新虚拟鼠标绘制位置
-                                        //       if (m_virtualMouseWidget) {
-                                        //           m_virtualMouseWidget->updateMousePos(x, y);
-                                        //       }
-    qDebug() << "[MouseSimulator] 鼠标移动到绝对坐标：" << x << "," << y;
+    //    // 同步更新虚拟鼠标绘制位置
+    //       if (m_virtualMouseWidget) {
+    //           m_virtualMouseWidget->updateMousePos(x, y);
+    //       }
+    lock.unlock();
+    LOG_MESSAGE("MouseSimulator", QString("鼠标移动到绝对坐标：%1,%2").arg(x).arg(y))
     return true;
 }
 
 bool MouseSimulator::moveMouseRelative(int dx, int dy)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
@@ -96,7 +102,7 @@ bool MouseSimulator::moveMouseRelative(int dx, int dy)
     int curX, curY;
     if (!getCurrentMousePos(curX, curY))
     {
-        qWarning() << "[MouseSimulator] 获取当前鼠标位置失败，无法相对移动";
+        LOG_MESSAGE("MouseSimulator", "获取当前鼠标位置失败，无法相对移动")
         return false;
     }
 
@@ -108,32 +114,13 @@ bool MouseSimulator::moveMouseRelative(int dx, int dy)
 
 bool MouseSimulator::clickMouse(MouseButton button, int x, int y)
 {
-    //    if (!m_x11struct->m_x11Display)
-    //        return false;
-
-    //    // 如果指定了坐标，先移动到目标位置
-    //    if (x >= 0 && y >= 0)
-    //    {
-    //        moveMouse(x, y);
-    //    }
-
-    //    // 按下 + 释放 = 单次点击（适配void*参数类型）
-    //    XTestFakeButtonEvent((void *)m_x11struct->m_x11Display, button, True, CurrentTime);   // 按下
-    //    XTestFakeButtonEvent((void *)m_x11struct->m_x11Display, button, False, CurrentTime);  // 释放
-    //    XFlush(m_x11struct->m_x11Display);
-
-    //    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-    //             << "点击，坐标：" << (x >= 0 ? QString::number(x) : "当前位置") << ","
-    //             << (y >= 0 ? QString::number(y) : "当前位置");
-    //    return true;
-
     // 先按下
     if (!pressMouse(button, x, y))
     {
         return false;
     }
     // 可选：添加短延迟（模拟真实点击的按下-释放间隔）
-    // usleep(50 * 1000); // 50ms延迟
+    QThread::msleep(50);
     // 再释放
     return releaseMouse(button, x, y);
 }
@@ -145,30 +132,33 @@ bool MouseSimulator::pressMouse(MouseSimulator::MouseButton button, int x, int y
         return false;
     }
     // 校验X11连接有效性
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct || !m_x11struct->m_x11Display)
     {
-        qWarning() << "[MouseSimulator] X11显示连接无效，无法按下鼠标";
+        LOG_MESSAGE("MouseSimulator", "X11显示连接无效，无法按下鼠标")
         return false;
     }
-
+    lock.unlock();
     // 如果指定了坐标，先移动到目标位置
     if (x >= 0 && y >= 0)
     {
         if (!moveMouse(x, y))
         {
-            qWarning() << "[MouseSimulator] 移动鼠标到坐标(" << x << "," << y << ")失败";
+            LOG_MESSAGE("MouseSimulator", QString("移动鼠标到坐标失败:%1,%2").arg(x).arg(y))
             return false;
         }
     }
-
+    lock.relock();
     // 仅发送鼠标按下事件（不释放，实现长按）
     XTestFakeButtonEvent(m_x11struct->m_x11Display, button, True, CurrentTime);
     XFlush(m_x11struct->m_x11Display);
-
+    lock.unlock();
     // 日志输出
-    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-             << "按下，坐标：" << (x >= 0 ? QString::number(x) : "当前位置") << ","
-             << (y >= 0 ? QString::number(y) : "当前位置");
+    QString logMsg = QString("鼠标%1按下，坐标：%2,%3")
+                         .arg(button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
+                         .arg(x >= 0 ? QString::number(x) : "当前位置")
+                         .arg(y >= 0 ? QString::number(y) : "当前位置");
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
@@ -179,11 +169,13 @@ bool MouseSimulator::releaseMouse(MouseSimulator::MouseButton button, int x, int
         return false;
     }
     // 校验X11连接有效性
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct || !m_x11struct->m_x11Display)
     {
-        qWarning() << "[MouseSimulator] X11显示连接无效，无法释放鼠标";
+        LOG_MESSAGE("MouseSimulator", "X11显示连接无效，无法按下鼠标");
         return false;
     }
+    lock.unlock();
 
     // 可选：若指定坐标，先移动到目标位置（保证释放位置和按下位置一致）
     if (x >= 0 && y >= 0)
@@ -192,21 +184,25 @@ bool MouseSimulator::releaseMouse(MouseSimulator::MouseButton button, int x, int
     }
 
     // 仅发送鼠标释放事件
+    lock.relock();
     XTestFakeButtonEvent(m_x11struct->m_x11Display, button, False, CurrentTime);
     XFlush(m_x11struct->m_x11Display);
-
+    lock.unlock();
     // 日志输出
-    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-             << "释放，坐标：" << (x >= 0 ? QString::number(x) : "当前位置") << ","
-             << (y >= 0 ? QString::number(y) : "当前位置");
+    QString logMsg = QString("鼠标%1按下，坐标：%2,%3")
+                         .arg(button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
+                         .arg(x >= 0 ? QString::number(x) : "当前位置")
+                         .arg(y >= 0 ? QString::number(y) : "当前位置");
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
 bool MouseSimulator::doubleClickMouse(MouseButton button, int x, int y, int interval)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
-
+    lock.unlock();
     // 第一次点击
     clickMouse(button, x, y);
     // 双击间隔（模拟人类操作延迟）
@@ -214,14 +210,17 @@ bool MouseSimulator::doubleClickMouse(MouseButton button, int x, int y, int inte
     // 第二次点击
     clickMouse(button, x, y);
 
-    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-             << "双击，坐标：" << (x >= 0 ? QString::number(x) : "当前位置") << ","
-             << (y >= 0 ? QString::number(y) : "当前位置");
+    QString logMsg = QString("鼠标%1按下，坐标：%2,%3")
+                         .arg(button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
+                         .arg(x >= 0 ? QString::number(x) : "当前位置")
+                         .arg(y >= 0 ? QString::number(y) : "当前位置");
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
 bool MouseSimulator::pressMouse(MouseButton button)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
@@ -231,14 +230,16 @@ bool MouseSimulator::pressMouse(MouseButton button)
     //      if (m_virtualMouseWidget) {
     //          m_virtualMouseWidget->updateMousePressState(true);
     //      }
-
-    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-             << "按下";
+    lock.unlock();
+    QString logMsg =
+        QString("鼠标%1按下").arg(button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"));
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
 bool MouseSimulator::releaseMouse(MouseButton button)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
@@ -248,13 +249,16 @@ bool MouseSimulator::releaseMouse(MouseButton button)
     //    if (m_virtualMouseWidget) {
     //        m_virtualMouseWidget->updateMousePressState(false);
     //    }
-    qDebug() << "[MouseSimulator] 鼠标" << (button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"))
-             << "释放";
+    lock.unlock();
+    QString logMsg =
+        QString("鼠标%1按下").arg(button == LeftButton ? "左键" : (button == RightButton ? "右键" : "中键"));
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
 bool MouseSimulator::scrollWheel(WheelDirection direction, int steps)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
@@ -286,15 +290,32 @@ bool MouseSimulator::scrollWheel(WheelDirection direction, int steps)
         QThread::msleep(10);  // 每步间隔，避免滚动过快
     }
     XFlush(m_x11struct->m_x11Display);
+    lock.unlock();
+    QString directionStr;
+    switch (direction)
+    {
+        case WheelUp:
+            directionStr = "上";
+            break;
+        case WheelDown:
+            directionStr = "下";
+            break;
+        case WheelLeft:
+            directionStr = "左";
+            break;
+        default:
+            directionStr = "右";
+            break;  // WheelRight
+    }
 
-    qDebug() << "[MouseSimulator] 鼠标滚轮"
-             << (direction == WheelUp ? "上" : (direction == WheelDown ? "下" : (direction == WheelLeft ? "左" : "右")))
-             << "滚动" << steps << "步";
+    QString logMsg = QString("鼠标滚轮%1滚动%2步").arg(directionStr).arg(steps);
+    LOG_MESSAGE("MouseSimulator", logMsg)
     return true;
 }
 
 bool MouseSimulator::getCurrentMousePos(int &x, int &y)
 {
+    QMutexLocker lock(&m_mutex);
     if (!m_x11struct->m_x11Display)
         return false;
 
@@ -312,7 +333,8 @@ bool MouseSimulator::getCurrentMousePos(int &x, int &y)
         y = rootY;
         return true;
     }
+    lock.unlock();
 
-    qWarning() << "[MouseSimulator] 获取当前鼠标位置失败";
+    LOG_MESSAGE("MouseSimulator", "获取当前鼠标位置失败")
     return false;
 }

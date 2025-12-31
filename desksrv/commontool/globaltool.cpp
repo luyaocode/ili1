@@ -202,9 +202,11 @@ bool isAlreadyRunning(const std::string &name)
     }
 
     /* 清空锁文件,然后将当前守护进程pid写入锁文件 */
-    ftruncate(fdLockFile, 0);
+    auto ret =ftruncate(fdLockFile, 0);
+    (void)ret;
     sprintf(szPid, "%ld", (long)getpid());
-    write(fdLockFile, szPid, strlen(szPid) + 1);
+    ret=write(fdLockFile, szPid, strlen(szPid) + 1);
+    (void)ret;
 
     return false;
 }

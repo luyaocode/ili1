@@ -151,7 +151,8 @@ void QTerminalWidget::sendCommand(const QString &command)
     }
     // 向伪终端写入命令（加换行符执行）
     QByteArray data = command.toLocal8Bit() + "\n";
-    write(m_ptyMasterFd, data.data(), data.size());
+    ssize_t size = write(m_ptyMasterFd, data.data(), data.size());
+    Q_UNUSED(size)
 }
 
 // 更新命令历史（去重）
@@ -181,7 +182,8 @@ bool QTerminalWidget::eventFilter(QObject *obj, QEvent *event)
         // 处理Ctrl+D（发送EOF）
         if (keyEvent->modifiers() & Qt::ControlModifier && keyEvent->key() == Qt::Key_D) {
             if (m_ptyMasterFd != -1) {
-                write(m_ptyMasterFd, "\x04", 1);  // EOF的ASCII码
+                auto ret = write(m_ptyMasterFd, "\x04", 1);  // EOF的ASCII码
+                (void)ret;
             }
             return true;
         }

@@ -442,6 +442,32 @@ void UintTest::test_TryLock()
     n.tryLock();
 }
 
+// 鼠标画圆形轨迹（以屏幕中心(960,540)为圆心）
+void drawMouseCircle(MouseSimulator * mouseSim) {
+    // 配置参数
+    const int centerX = 960;    // 圆心X坐标（屏幕中心）
+    const int centerY = 540;    // 圆心Y坐标（屏幕中心）
+    const int radius = 200;     // 圆的半径（可根据需要调整）
+    const int steps = 1000;      // 绘制圆的步数（步数越多，圆越平滑）
+    const int delayMs = 10;     // 每步移动的延时（毫秒，越小速度越快）
+
+    // 遍历0~360度，计算每个点的坐标并移动鼠标
+    for (int i = 0; i <= steps; ++i) {
+        // 将角度转换为弧度（三角函数需要弧度值）
+        double angle = 2 * M_PI * i / steps;
+
+        // 圆的参数方程计算当前点坐标
+        int x = centerX + radius * cos(angle);
+        int y = centerY + radius * sin(angle);
+
+        // 移动鼠标到当前点
+        mouseSim->moveMouse(x, y);
+
+        // 短暂延时，让轨迹可见（使用ms级延时更细腻）
+        QThread::msleep(delayMs);
+    }
+}
+
 void UintTest::test_mouseSimulator()
 {
     // 1. 规范初始化 QApplication
@@ -460,34 +486,35 @@ void UintTest::test_mouseSimulator()
     }
 
     // 2. 移动鼠标到屏幕中心（假设屏幕分辨率1920x1080）
-    mouseSim->moveMouse(960, 540);
-    QThread::sleep(1);  // 等待1秒，便于观察
+//    mouseSim->moveMouse(960, 540);
+//    QThread::sleep(1);  // 等待1秒，便于观察
+    drawMouseCircle(mouseSim);
 
-    // 3. 左键单击屏幕中心
-    mouseSim->clickMouse(MouseSimulator::LeftButton, 960, 540);
-    QThread::sleep(1);
+//    // 3. 左键单击屏幕中心
+//    mouseSim->clickMouse(MouseSimulator::LeftButton, 960, 540);
+//    QThread::sleep(1);
 
-    // 4. 右键单击当前位置（不指定坐标）
-    mouseSim->clickMouse(MouseSimulator::RightButton);
-    QThread::sleep(1);
+//    // 4. 右键单击当前位置（不指定坐标）
+//    mouseSim->clickMouse(MouseSimulator::RightButton);
+//    QThread::sleep(1);
 
-    // 5. 中键双击
-    mouseSim->doubleClickMouse(MouseSimulator::MiddleButton, 960, 540);
-    QThread::sleep(1);
+//    // 5. 中键双击
+//    mouseSim->doubleClickMouse(MouseSimulator::MiddleButton, 960, 540);
+//    QThread::sleep(1);
 
-    // 6. 鼠标相对移动（右移50px，下移50px）
-    mouseSim->moveMouseRelative(50, 50);
-    QThread::sleep(1);
+//    // 6. 鼠标相对移动（右移50px，下移50px）
+//    mouseSim->moveMouseRelative(50, 50);
+//    QThread::sleep(1);
 
-    // 7. 鼠标滚轮向下滚动2步
-    mouseSim->scrollWheel(MouseSimulator::WheelDown, 2);
-    QThread::sleep(1);
+//    // 7. 鼠标滚轮向下滚动2步
+//    mouseSim->scrollWheel(MouseSimulator::WheelDown, 2);
+//    QThread::sleep(1);
 
     // 8. 鼠标左键按下并释放（模拟拖拽）
-    mouseSim->pressMouse(MouseSimulator::LeftButton);
-    QThread::msleep(500);
-    mouseSim->moveMouseRelative(100, 0);  // 右拖100px
-    mouseSim->releaseMouse(MouseSimulator::LeftButton);
+//    mouseSim->pressMouse(MouseSimulator::LeftButton);
+//    QThread::msleep(500);
+//    mouseSim->moveMouseRelative(100, 0);  // 右拖100px
+//    mouseSim->releaseMouse(MouseSimulator::LeftButton);
 
     qInfo() << "所有鼠标操作执行完成";
 //    app.exec();

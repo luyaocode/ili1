@@ -8,6 +8,11 @@ const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
 let screenWidth = 0;
 let screenHeight = 0;
+// 全局变量（新增）
+let isCanvasActive = false; // 标记鼠标是否在screenCanvas区域内
+// 全局变量新增
+let prevCanvasData = null; // 上一帧Canvas数据，用于绘制差分
+let isFirstFrame = true;   // 是否是第一帧
 
 // 键盘状态跟踪：记录组合键是否按下
 const keyState = {
@@ -24,6 +29,10 @@ function initWebSocket() {
     if (ws) {
         ws.close();
     }
+
+    // 修复点4：每次重连时重置首帧标记
+    isFirstFrame = true;
+    prevCanvasData = null;
 
     // 创建新连接
     ws = new WebSocket(WS_HOST);
@@ -51,13 +60,17 @@ function initWebSocket() {
             // 处理文本JSON消息
             const data = JSON.parse(event.data);
             if (data.type === 'screen_frame_meta') {
-                // 保存帧元信息，等待二进制数据
+                // 修复点6：为所有字段设置默认值，避免首帧解析错误
                 currentFrameMeta = {
-                    width: data.width,
-                    height: data.height
+                    width: data.width || canvas.width || 1920,
+                    height: data.height || canvas.height || 1080,
+                    diff_x: data.diff_x || 0,
+                    diff_y: data.diff_y || 0,
+                    diff_w: data.diff_w || (data.width || 1920),
+                    diff_h: data.diff_h || (data.height || 1080),
+                    is_full: data.is_full || false
                 };
             }
-            // 保留原有键鼠事件处理（如果后端有响应的话）
         }
     };
 
@@ -96,7 +109,7 @@ function renderScreenFrame(frame) {
     img.src = `data:image/png;base64,${frame.base64}`;
 }
 
-// 渲染JPEG二进制帧
+// 渲染JPEG二进制帧（修改为支持差分绘制）
 function renderJpegFrame(blob, meta) {
     // 创建图片URL
     const imgUrl = URL.createObjectURL(blob);
@@ -106,17 +119,32 @@ function renderJpegFrame(blob, meta) {
         // 释放URL，避免内存泄漏
         URL.revokeObjectURL(imgUrl);
 
-        // 设置Canvas尺寸
-        canvas.width = meta.width;
-        canvas.height = meta.height;
-
-        // 绘制图片
-        ctx.drawImage(img, 0, 0);
+        // 修复点1：强化首帧/全屏帧的Canvas尺寸初始化
+        if (meta.is_full || isFirstFrame) {
+            // 强制重置Canvas尺寸（避免CSS尺寸和像素尺寸不一致）
+            canvas.width = meta.width;
+            canvas.height = meta.height;
+            // 清空画布（避免残留旧内容）
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 完整绘制首帧
+            ctx.drawImage(img, 0, 0, meta.width, meta.height);
+            isFirstFrame = false;
+        } else {
+            // 差分帧：仅绘制变化区域
+            const diffX = meta.diff_x;
+            const diffY = meta.diff_y;
+            const diffW = meta.diff_w;
+            const diffH = meta.diff_h;
+            // 在指定位置绘制差分图像（不重置整个Canvas）
+            ctx.drawImage(img, diffX, diffY, diffW, diffH);
+        }
     };
 
     img.onerror = (err) => {
         console.error('Failed to load JPEG frame:', err);
         URL.revokeObjectURL(imgUrl);
+        // 修复点3：加载失败时重置首帧标记，重新请求全屏帧
+        isFirstFrame = true;
     };
 
     img.src = imgUrl;
@@ -316,6 +344,31 @@ function initKeyButtonEvents() {
 
 // 监听Canvas鼠标事件
 function initMouseEvents() {
+    // 新增：鼠标进入Canvas区域
+    canvas.addEventListener('mouseenter', () => {
+       isCanvasActive = true;
+    });
+
+    // 新增：鼠标离开Canvas区域
+    canvas.addEventListener('mouseleave', () => {
+       isCanvasActive = false;
+       // 鼠标离开时，重置键盘按下状态（避免按键残留）
+       keyState.pressedKeys.forEach(key => {
+           sendKeyEvent({
+               type: 'keyboard',
+               action: 'release',
+               key: key,
+               modifiers: {
+                   ctrl: false,
+                   shift: false,
+                   alt: false,
+                   meta: false
+               }
+           });
+       });
+       resetKeyState();
+    });
+
     // 鼠标移动
     canvas.addEventListener('mousemove', (e) => {
     // 第一步：修正Canvas像素尺寸（关键！）
@@ -427,7 +480,11 @@ function initKeyboardEvents() {
     }
     // 键盘按下事件
     document.addEventListener('keydown', (e) => {
-        // 第一步：判断是否是关闭标签页快捷键，若是则阻止默认行为并直接返回（不发送事件）
+        // 新增：仅当鼠标在Canvas区域内时，才处理键盘事件
+         if (!isCanvasActive) {
+             return;
+         }
+        // 判断是否是关闭标签页快捷键，若是则阻止默认行为并直接返回（不发送事件）
          if (isCloseTabShortcut(e)) {
              e.preventDefault(); // 阻止关闭标签页
              console.log('已拦截关闭标签页快捷键：', e.key, '+', e.ctrlKey ? 'Ctrl' : 'Meta');
@@ -483,6 +540,14 @@ function initKeyboardEvents() {
 
     // 键盘释放事件
     document.addEventListener('keyup', (e) => {
+        // 新增：仅当鼠标在Canvas区域内时，才处理键盘事件
+         if (!isCanvasActive) {
+             // 若鼠标已离开，清理对应按键状态（避免残留）
+             keyState.pressedKeys.delete(formatKeyName(e.key));
+             keyState.ctrl = e.ctrlKey;
+             keyState.meta = e.metaKey;
+             return;
+         }
         // 判断是否是关闭标签页快捷键，若是则直接返回（不发送释放事件）
          if (isCloseTabShortcut(e)) {
              console.log('已拦截关闭标签页快捷键释放事件：', e.key);

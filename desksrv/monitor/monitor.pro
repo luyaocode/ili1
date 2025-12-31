@@ -11,8 +11,8 @@ QMAKE_CXXFLAGS += -Wall -Wextra
 contains(CONFIG,qml_debug){
     DEFINES+=DEBUG
 }
-message("current_config: $$CONFIG")
-message("current_define: $$DEFINES")
+#message("current_config: $$CONFIG")
+#message("current_define: $$DEFINES")
 
 # 源文件
 SOURCES += \
@@ -82,7 +82,6 @@ FILES_TO_COPY = \
     $$PWD/install.sh \
     $$PWD/package.sh \
     $$PWD/README.sh
-message($$FILES_TO_COPY)
 for(f, FILES_TO_COPY) {
     QMAKE_POST_LINK += $$quote(cp -f $$shell_path($$f) $$shell_path($$DESTDIR)$$escape_expand(\\n\\t))
 }

@@ -1,6 +1,4 @@
-// WebSocket连接配置（替换为你的后端IP和端口）
-const WS_HOST = "{{WS_HOST}}";
-let ws = null;
+let wsconn = null;
 let cmdHistory = []; // 指令历史
 let historyIndex = -1; // 历史记录索引
 let inputBuffer = ''; // 终端输入缓冲区
@@ -17,17 +15,19 @@ function uint8ArrayToString(buffer) {
 }
 
 // 初始化WebSocket连接
-function initWebSocket() {
-  ws = new WebSocket(WS_HOST);
+function initWs() {
+    // WebSocket连接配置（替换为你的后端IP和端口）
+    const WS_HOST = "{{WS_HOST}}";
+  wsconn = new WebSocket(WS_HOST);
 
   // 连接成功
-  ws.onopen = function() {
+  wsconn.onopen = function() {
     appendOutput("[连接成功] 已连接到WebSocket Bash服务器", "info");
     term.prompt(); // 连接成功后显示提示符
   };
 
 // 接收后端二进制消息（核心修改）
-  ws.onmessage = function(event) {
+  wsconn.onmessage = function(event) {
     // 判断是否为二进制数据（Blob/ArrayBuffer）
     if (event.data instanceof Blob) {
       // 读取Blob类型的二进制数据
@@ -52,14 +52,14 @@ function initWebSocket() {
   };
 
   // 连接关闭
-  ws.onclose = function() {
+  wsconn.onclose = function() {
     appendOutput("[连接关闭] 与服务器的连接已断开", "error");
     // 尝试重连（可选）
     setTimeout(initWebSocket, 3000);
   };
 
   // 连接错误
-  ws.onerror = function(error) {
+  wsconn.onerror = function(error) {
     appendOutput(`[连接错误] ${error.message}`, "error");
   };
 }
@@ -84,7 +84,7 @@ function appendOutput(text, className) {
 
 // 发送指令到后端（二进制格式）
 function sendCommand(cmd) {
-  if (!cmd || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!cmd || !wsconn || wsconn.readyState !== WebSocket.OPEN) return;
 
   // 记录指令历史
   cmdHistory.push(cmd);
@@ -92,7 +92,7 @@ function sendCommand(cmd) {
 
   // 核心修改：将字符串转为二进制（UTF-8）后发送
   const binaryData = stringToUint8Array(cmd);
-  ws.send(binaryData);
+  wsconn.send(binaryData);
 
   // 清空输入缓冲区
   inputBuffer = '';
@@ -179,5 +179,5 @@ function initTerminal() {
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
   initTerminal(); // 先初始化终端
-  initWebSocket(); // 再初始化WebSocket连接
+  initWs(); // 再初始化WebSocket连接
 });

@@ -38,6 +38,12 @@ QImage create_frame_generator(int frame_index, int width, int height)
 bool create_video_encoder(
     GenerateFrameFunc frame_func, int width, int height, int fps, int duration, const std::string &output_path)
 {
+    Q_UNUSED(frame_func)
+    Q_UNUSED(width)
+    Q_UNUSED(height)
+    Q_UNUSED(fps)
+    Q_UNUSED(duration)
+    Q_UNUSED(output_path)
     return false;
 }
 

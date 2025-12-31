@@ -15,6 +15,12 @@ PluginInfo get_plugin_info()
 bool create_video_encoder(
     GenerateFrameFunc frame_func, int width, int height, int fps, int duration, const std::string &output_path)
 {
+    Q_UNUSED(frame_func)
+    Q_UNUSED(width)
+    Q_UNUSED(height)
+    Q_UNUSED(fps)
+    Q_UNUSED(duration)
+    Q_UNUSED(output_path)
     return false;
 }
 // 导出接口

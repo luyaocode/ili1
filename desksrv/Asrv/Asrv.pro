@@ -2,6 +2,17 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += core network websockets gui widgets
 
 include($$PWD/../mainconfig.pri)
 
+
+CONFIG(debug, debug|release) {
+    # Debug 模式专属宏
+    DEFINES += DEBUG
+    message(当前编译模式: debug)
+} else {
+    # Release 模式专属宏
+    DEFINES += RELEASE
+    message(当前编译模式: release)
+}
+
 DESTDIR =  $$(HOME)/target_dir/desksrv/Asrv
 # 不存在目标目录就先创建
 QMAKE_POST_LINK += mkdir -p $$shell_quote($$DESTDIR) ;
@@ -50,17 +61,23 @@ DISTFILES += \
     www/xterm.html \
     www/js/xterm.min.js \
     www/css/xterm.css \
+    www/js/xterm-addon-attach.js \
+    www/js/xterm-addon-fit.js \
     www/js/xterm-addon-fit.min.js \
+    www/js/xterm.js \
+    www/js/term.min.js \
     www/js/xtermpage.js \
     www/screen_ctrl.html \
     www/js/screen_ctrl.js \
     www/css/screen_ctrl.css \
-    version.json
+    version.json \
+    www/js/termpage.js \
+    run.sh
 
 unix: {
     QMAKE_POST_LINK += rm -rf $$shell_path($$DESTDIR/www) ; \
                        cp -rf $$shell_path($$PWD/www) $$shell_path($$DESTDIR) ; \
                        cp -d $$shell_path($$DESTDIR/../libcommontool.so*) $$shell_path($$DESTDIR) ; \
-                       cp -rf $$shell_path($$PWD/version.json) $$shell_path($$DESTDIR) ;
+                       cp -rf $$shell_path($$PWD/version.json $$PWD/run.sh) $$shell_path($$DESTDIR) ;
 }
 

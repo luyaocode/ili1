@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QMutex>
 
 //#include "X11/X.h"
 struct x11struct;
@@ -138,6 +139,7 @@ private:
 
     x11struct             *m_x11struct;  // X11显示连接（核心句柄）
     static MouseSimulator *m_instance;   // 单例实例
+    static QMutex m_mutex;
     //    VirtualMouseWidget    *m_virtualMouseWidget;  // 新增：虚拟鼠标绘制窗口
 };
 

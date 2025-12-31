@@ -18,9 +18,9 @@ private:
     void setScheduledTask();
 
 private:
-    int           eyes_tolerance_minutes;
-    InputWatcher *m_inputWatcher  = nullptr;
-    QTimer       *m_activityTimer = nullptr;
+    int           eyes_tolerance_minutes = 0;
+    InputWatcher *m_inputWatcher         = nullptr;
+    QTimer       *m_activityTimer        = nullptr;
     qint64        m_activitySeconds;            // 短时活动
     qint64        m_totalActivitySecondsToday;  // 全天活动时长
 };

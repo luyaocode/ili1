@@ -97,10 +97,10 @@ body {
     transition: flex 0.2s ease; /* 比例调整时的过渡动画 */
 }
 .screen {
-    flex: 7;
+    flex: 8;
 }
 .bash{
-    flex: 3;
+    flex: 2;
 }
 /* 面板分隔条样式（支持拖拽调整比例） */
 .panel-splitter {

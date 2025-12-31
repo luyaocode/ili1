@@ -22,17 +22,14 @@ EyesProtector::EyesProtector(InputWatcher *inputWatcher, QObject *parent)
         {
             m_totalActivitySecondsToday += 10;
             m_activitySeconds += 10;
-            if (eyes_tolerance_minutes * 60 <= m_activitySeconds)
-            {
-                ExtProcess::eyesProtect();
-            }
-            if(m_totalActivitySecondsToday%600==0)
+            if (m_totalActivitySecondsToday % 600 == 0)
             {
                 qDebug() << "[EyesProtector] "
                          << "累计活动时间:" << m_activitySeconds << "秒";
             }
-            if (eyes_tolerance_minutes * 60 <= m_activitySeconds)
+            if (eyes_tolerance_minutes != 0 && eyes_tolerance_minutes * 60 == m_activitySeconds)
             {
+                ExtProcess::eyesProtect();
                 m_activitySeconds = 0;
             }
         }

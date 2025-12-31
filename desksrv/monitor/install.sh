@@ -67,16 +67,17 @@ echo "检查日志目录..."
 sudo mkdir -p /data/logs/monitor || { echo "创建日志目录失败"; exit 1; }
 sudo chmod 755 /data/logs/monitor  # 赋予基本权限
 
-# 启用并重启服务
-echo "配置服务..."
-sudo systemctl enable monitor || { echo "启用服务失败"; exit 1; }
+# 重载monitor配置
+echo "重载monitor配置..."
 sudo systemctl daemon-reload || { echo "重载服务配置失败"; exit 1; }
-sudo systemctl restart monitor || { echo "重启服务失败"; exit 1; }
-
+sudo systemctl enable monitor || { echo "启用服务失败"; exit 1; }
+echo "重启monitor服务..."
+sudo systemctl stop monitor || true
+sudo systemctl start monitor || { echo "启动monitor失败"; exit 1; }
 # 检查服务状态
 echo "服务状态："
 sudo systemctl status monitor --no-pager
-
+###############################################################################################################################
 # 【启动其他服务】
 echo "停止 PasteFlow"
 # 查找并杀死 PasteFlow 进程（排除grep自身）
@@ -133,5 +134,7 @@ sudo -u "${CURRENT_USER}" \
     XAUTHORITY="${CURRENT_HOME}/.Xauthority" \
     HOME="${CURRENT_HOME}" \
     USER="${CURRENT_USER}" \
-    bash -c "nohup /usr/bin/Asrv > /tmp/Asrv.log 2>&1 &"
+    bash -c "nohup /usr/bin/Asrv >> /tmp/Asrv.log 2>&1 &"
+
+###############################################################################################################################
 echo "操作完成"

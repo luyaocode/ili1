@@ -1,138 +1,136 @@
-#ifndef MOUSESIMULATOR_H
-#define MOUSESIMULATOR_H
+// x11_event_player.cpp
+#include "x11_event_player.h"
+#include <QDebug>
+#include <QThread>
+#include <QDateTime>
+#include "x11struct.h"
 
-#include <QObject>
-#include <QString>
-#include <X11/Xlib.h>
-
-// 手动声明XTest核心函数（替代XTest.h，兼容缺少头文件场景）
+// 手动声明 XTest 核心函数（因缺少 XTest.h，直接声明函数原型）
 extern "C" {
-// XTest扩展可用性检查
+void XTestFakeKeyEvent(Display *dpy, unsigned int keycode, Bool press, unsigned long delay);
 Bool XTestQueryExtension(Display *display, int *event_base_return, int *error_base_return);
-
-// 模拟鼠标按键事件（兼容void*和Display*参数类型）
 void XTestFakeButtonEvent(
     void* display,
     unsigned int button,
     int press,
     unsigned long delay
 );
-
-// 模拟鼠标移动事件
-void XTestFakeMotionEvent(
-    Display* display,
-    int deviceid,
-    int x,
-    int y,
-    unsigned long delay
-);
-
-// 模拟键盘事件（预留，当前未使用）
-void XTestFakeKeyEvent(Display *dpy, unsigned int keycode, Bool press, unsigned long delay);
 }
 
-// 鼠标事件模拟工具类（X11环境）
-// 支持：鼠标移动、左右中键点击/双击、滚轮滚动
-class MouseSimulator : public QObject
-{
-    Q_OBJECT
-public:
-    // 鼠标按键枚举（简化调用）
-    enum MouseButton {
-        LeftButton = Button1,    // 左键
-        RightButton = Button3,   // 右键（X11中Button2是中键，Button3是右键）
-        MiddleButton = Button2   // 中键
-    };
-    Q_ENUM(MouseButton)
 
-    // 滚轮方向枚举
-    enum WheelDirection {
-        WheelUp,    // 向上滚动
-        WheelDown,  // 向下滚动
-        WheelLeft,  // 向左滚动
-        WheelRight  // 向右滚动
-    };
-    Q_ENUM(WheelDirection)
+X11EventPlayer::X11EventPlayer(QObject *parent)
+    : QObject(parent), display(nullptr) {}
 
-    // 单例模式（全局唯一实例，避免重复连接X11）
-    static MouseSimulator* getInstance(QObject *parent = nullptr);
+X11EventPlayer::~X11EventPlayer() {
+    cleanupX11();
+}
 
-    // ========== 核心接口 ==========
-    /**
-     * @brief 移动鼠标到指定绝对坐标
-     * @param x 目标X坐标（X11原点在左上角）
-     * @param y 目标Y坐标
-     * @return 成功返回true，失败返回false
-     */
-    bool moveMouse(int x, int y);
+bool X11EventPlayer::initializeX11() {
+    display = XOpenDisplay(nullptr);
+    if (!display) {
+        emit errorOccurred("Failed to open X display.");
+        return false;
+    }
+    // 检查 XTest 扩展是否可用
+    int xtest_event_base, xtest_error_base;
+    if (!XTestQueryExtension(display, &xtest_event_base, &xtest_error_base)) {
+        emit errorOccurred("XTest extension not available. Cannot simulate events.");
+        return false;
+    }
+    return true;
+}
 
-    /**
-     * @brief 相对当前位置移动鼠标
-     * @param dx X轴偏移量（正数右移，负数左移）
-     * @param dy Y轴偏移量（正数下移，负数上移）
-     * @return 成功返回true，失败返回false
-     */
-    bool moveMouseRelative(int dx, int dy);
+void X11EventPlayer::cleanupX11() {
+    // XCloseDisplay is managed by Qt
+    display = nullptr;
+}
 
-    /**
-     * @brief 触发鼠标按键点击（按下+释放）
-     * @param button 鼠标按键（Left/Right/Middle）
-     * @param x 点击位置X坐标（-1表示使用当前鼠标位置）
-     * @param y 点击位置Y坐标（-1表示使用当前鼠标位置）
-     * @return 成功返回true，失败返回false
-     */
-    bool clickMouse(MouseButton button, int x = -1, int y = -1);
+bool X11EventPlayer::playEvents(const QList<RecordedEvent>& events) {
+    if (events.isEmpty()) {
+        emit errorOccurred("No events to play.");
+        return false;
+    }
 
-    /**
-     * @brief 触发鼠标按键双击
-     * @param button 鼠标按键（Left/Right/Middle）
-     * @param x 双击位置X坐标（-1表示使用当前鼠标位置）
-     * @param y 双击位置Y坐标（-1表示使用当前鼠标位置）
-     * @param interval 双击间隔（毫秒，默认500ms）
-     * @return 成功返回true，失败返回false
-     */
-    bool doubleClickMouse(MouseButton button, int x = -1, int y = -1, int interval = 500);
+    if (!initializeX11()) {
+        return false;
+    }
 
-    /**
-     * @brief 单独触发鼠标按键按下
-     * @param button 鼠标按键（Left/Right/Middle）
-     * @return 成功返回true，失败返回false
-     */
-    bool pressMouse(MouseButton button);
+    emit playbackStarted();
+    qInfo() << "Starting playback of" << events.size() << "events...";
 
-    /**
-     * @brief 单独触发鼠标按键释放
-     * @param button 鼠标按键（Left/Right/Middle）
-     * @return 成功返回true，失败返回false
-     */
-    bool releaseMouse(MouseButton button);
+    qint64 playbackStartTime = QDateTime::currentMSecsSinceEpoch();
 
-    /**
-     * @brief 鼠标滚轮滚动
-     * @param direction 滚动方向（Up/Down/Left/Right）
-     * @param steps 滚动步数（默认1步，步数越多滚动距离越长）
-     * @return 成功返回true，失败返回false
-     */
-    bool scrollWheel(WheelDirection direction, int steps = 1);
+    for (int i = 0; i < events.size() && display; ++i) {
+        const RecordedEvent& event = events[i];
 
-    /**
-     * @brief 获取当前鼠标位置
-     * @param x 输出当前X坐标
-     * @param y 输出当前Y坐标
-     * @return 成功返回true，失败返回false
-     */
-    bool getCurrentMousePos(int &x, int &y);
+        // 计算需要等待的时间，以保证事件的时间间隔与记录时一致
+        qint64 expectedPlaybackTime = playbackStartTime + event.timestamp;
+        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+        qint64 sleepTime = expectedPlaybackTime - currentTime;
 
-private:
-    explicit MouseSimulator(QObject *parent = nullptr);
-    ~MouseSimulator() override;
+        if (sleepTime > 0) {
+            QThread::msleep(sleepTime);
+        }
 
-    // 禁止拷贝
-    MouseSimulator(const MouseSimulator&) = delete;
-    MouseSimulator& operator=(const MouseSimulator&) = delete;
+        if (!simulateEvent(event)) {
+            qWarning() << "Failed to simulate event at index" << i;
+        }
 
-    Display *m_display; // X11显示连接（核心句柄）
-    static MouseSimulator *m_instance; // 单例实例
-};
+        emit playbackProgress(i + 1, events.size());
+    }
 
-#endif // MOUSESIMULATOR_H
+    emit playbackFinished();
+    qInfo() << "Playback finished.";
+    cleanupX11();
+    return true;
+}
+
+bool X11EventPlayer::simulateEvent(const RecordedEvent& event) {
+    if (!display) return false;
+
+    switch (event.type) {
+        case EventType::MOUSE_MOVE:
+            XWarpPointer(display, None, None, 0, 0, 0, 0, event.x, event.y);
+            break;
+        case EventType::MOUSE_PRESS:
+            XTestFakeButtonEvent(display, event.button, True, CurrentTime);
+            break;
+        case EventType::MOUSE_RELEASE:
+            XTestFakeButtonEvent(display, event.button, False, CurrentTime);
+            break;
+        case EventType::KEY_PRESS: {
+            KeySym keysym = event.keySym;
+            if (keysym == NoSymbol) {
+                qWarning() << "Unknown KeySym:" << event.keySym;
+                return false;
+            }
+            KeyCode keycode = XKeysymToKeycode(display, keysym);
+            if (keycode == 0) {
+                qWarning() << "KeySym" << event.keySym << "has no corresponding KeyCode.";
+                return false;
+            }
+            XTestFakeKeyEvent(display, keycode, True, CurrentTime);
+            break;
+        }
+        case EventType::KEY_RELEASE: {
+            KeySym keysym = event.keySym;
+            if (keysym == NoSymbol) {
+                qWarning() << "Unknown KeySym:" << event.keySym;
+                return false;
+            }
+            KeyCode keycode = XKeysymToKeycode(display, keysym);
+            if (keycode == 0) {
+                qWarning() << "KeySym" << event.keySym << "has no corresponding KeyCode.";
+                return false;
+            }
+            XTestFakeKeyEvent(display, keycode, False, CurrentTime);
+            break;
+        }
+        default:
+            qWarning() << "Cannot simulate unknown event type.";
+            return false;
+    }
+
+    XFlush(display); // 确保事件被立即发送
+    return true;
+}

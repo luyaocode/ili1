@@ -7,6 +7,8 @@
 
 #include "commontool/globaltool.h"
 #include "x11tool.h"
+#include "commontool/screenshooter.h"
+#include "commontool/globaldef.h"
 
 ScreenServer::ScreenServer(QObject *parent): QObject(parent)
 {
@@ -93,9 +95,11 @@ void ScreenServer::onNewConnection()
 
     qInfo() << "New client connected:" << client->peerAddress().toString();
 
-    // 初始化客户端信息
+    // 初始化客户端信息（差分字段已默认初始化：isFirstFrame=true）
     ClientInfo info;
     info.socket = client;
+    // 可自定义该客户端的差分阈值（如低带宽客户端调大阈值）
+    info.diffThreshold = 10;
     m_clientMap.insert(client, info);
 
     // 连接客户端信号
@@ -193,100 +197,68 @@ void ScreenServer::captureScreenAndPush()
         return;  // 无客户端，跳过截屏
     }
 
-    // 1. 截取屏幕（Qt跨平台方式）
-    QScreen *screen       = QApplication::primaryScreen();
-    QPixmap  pixmap       = screen->grabWindow(0);  // 截取整个屏幕
-    int      screenWidth  = pixmap.width();
-    int      screenHeight = pixmap.height();
-
-    // 2. 为每个客户端绘制专属鼠标（按相对坐标转换）
+    // 1. 截取当前屏幕
+    std::future<QPixmap> pixmapFuture       = ScreenShooter::instance()->captureScreenAsync();
+    QPixmap              currPixmap         = pixmapFuture.get();
+    int                  globalScreenWidth  = currPixmap.width();
+    int                  globalScreenHeight = currPixmap.height();
+    // 5. 为每个客户端推送差分数据
     for (auto client : m_clientMap.keys())
     {
-        ClientInfo &info         = m_clientMap[client];
-        QPixmap     clientPixmap = pixmap.copy();  // 拷贝截屏，避免多客户端互相影响
+        ClientInfo &info = m_clientMap[client];  // 单个客户端的专属状态
+        QRect       diffRect;
 
-        // 3. 绘制虚拟鼠标
-        QPainter painter(&clientPixmap);
-        painter.setRenderHint(QPainter::Antialiasing);
-
-        // 转换相对坐标到屏幕绝对坐标
-        int mouseX = info.mouseX * screenWidth / info.screenWidth;  // 前端传的相对宽度=屏幕宽度时直接用
-        int mouseY = info.mouseY * screenHeight / info.screenHeight;
-
-        // 绘制鼠标（箭头样式）
-        int          mouseSize = 20;
-        QPainterPath mousePath;
-        mousePath.moveTo(mouseX, mouseY);
-        mousePath.lineTo(mouseX + mouseSize, mouseY + mouseSize / 2);
-        mousePath.lineTo(mouseX + mouseSize / 3, mouseY + mouseSize);
-        mousePath.lineTo(mouseX, mouseY + mouseSize / 3);
-        mousePath.closeSubpath();
-
-        // 按压状态样式
-        if (info.isLeftPressed)
+        // 2.1 该客户端的差分区域计算（独立判断首帧）
+        if (info.isFirstFrame || info.prevPixmap.isNull() || info.prevPixmap.size() != currPixmap.size())
         {
-            painter.setBrush(QColor(255, 0, 0, 180));
-            painter.setPen(QPen(Qt::red, 2));
-        }
-        else if (info.isRightPressed)
-        {
-            painter.setBrush(QColor(0, 0, 255, 180));
-            painter.setPen(QPen(Qt::blue, 2));
+            // 该客户端首帧/分辨率变化：发送全屏
+            diffRect          = QRect(0, 0, globalScreenWidth, globalScreenHeight);
+            info.isFirstFrame = false;
+            info.prevPixmap   = currPixmap.copy();  // 初始化该客户端的上一帧
         }
         else
         {
-            painter.setBrush(QColor(0, 0, 0, 180));
-            painter.setPen(QPen(Qt::black, 2));
+            // 对比该客户端的上一帧和当前帧
+            diffRect = calculateDiffRect(info.prevPixmap, currPixmap, info.diffThreshold);
+            if (diffRect.isEmpty())
+            {
+                continue;  // 该客户端无变化，跳过推送
+            }
+            info.prevPixmap = currPixmap.copy();  // 更新该客户端的上一帧
         }
 
-        painter.drawPath(mousePath);
-        // 白色描边增强辨识度
-        painter.setBrush(Qt::transparent);
-        painter.setPen(QPen(Qt::white, 1));
-        painter.drawPath(mousePath);
+        // 2.2 裁剪该客户端的差分区域
+        QPixmap diffPixmap = currPixmap.copy(diffRect);
 
-        //        // 4. 转换为Base64编码
-        //        QByteArray byteArray;
-        //        QBuffer    buffer(&byteArray);
-        //        buffer.open(QIODevice::WriteOnly);
-        //        clientPixmap.save(&buffer, "PNG", 80);  // 80%质量压缩
-        //        QString base64Str = byteArray.toBase64();
+        // 2.3 绘制该客户端的专属鼠标
+        QPixmap clientPixmap = diffPixmap.copy();
+        if (diffRect.contains(info.mouseX, info.mouseY))
+        {
+            // 差分传输 鼠标会有残影
+//            drawVirtualMouse(info, globalScreenWidth, globalScreenHeight, clientPixmap);
+        }
 
-        //        // 5. 构造JSON消息推送
-        //        QJsonObject jsonObj;
-        //        jsonObj["type"]   = "screen_frame";
-        //        jsonObj["base64"] = base64Str;
-        //        jsonObj["width"]  = screenWidth;
-        //        jsonObj["height"] = screenHeight;
-
-        //        QJsonDocument jsonDoc(jsonObj);
-        //        sendMessageToClient(client, jsonDoc.toJson(QJsonDocument::Compact));
-
-        // ========== 关键修改：转为JPEG二进制 ==========
-        // 4. 将Pixmap转为JPEG格式的二进制数据
-        QImage     image = clientPixmap.toImage();
-        QByteArray jpegData;
-        QBuffer    buffer(&jpegData);
-        buffer.open(QIODevice::WriteOnly);
-        // 保存为JPEG，质量可调整（0-100）
-        image.save(&buffer, "JPEG", 85);  // 85%质量，平衡画质和体积
-
-        // 5. 先发送帧信息（JSON文本），再发送JPEG二进制
-        // 帧信息JSON
+        // 2.4 构造该客户端的差分帧信息
         QJsonObject frameInfo;
-        frameInfo["type"]   = "screen_frame_meta";
-        frameInfo["width"]  = screenWidth;
-        frameInfo["height"] = screenHeight;
-        frameInfo["size"]   = jpegData.size();  // 告知前端二进制数据长度
+        frameInfo["type"]    = "screen_frame_meta";
+        frameInfo["width"]   = globalScreenWidth;
+        frameInfo["height"]  = globalScreenHeight;
+        frameInfo["diff_x"]  = diffRect.x();
+        frameInfo["diff_y"]  = diffRect.y();
+        frameInfo["diff_w"]  = diffRect.width();
+        frameInfo["diff_h"]  = diffRect.height();
+        frameInfo["is_full"] = (diffRect.width() == globalScreenWidth && diffRect.height() == globalScreenHeight);
 
+        // 2.5 发送该客户端的元信息和二进制数据
         QJsonDocument infoDoc(frameInfo);
         sendMessageToClient(client, infoDoc.toJson(QJsonDocument::Compact));
 
-        // 发送JPEG二进制数据
+        QImage     diffImage = clientPixmap.toImage();
+        QByteArray jpegData;
+        QBuffer    buffer(&jpegData);
+        buffer.open(QIODevice::WriteOnly);
+        diffImage.save(&buffer, "JPEG", 100);
         sendBinaryToClient(client, jpegData);
-
-        //        qDebug() << "Send JPEG frame to client:" << screenWidth << "x" << screenHeight << "Size:" << jpegData.size()
-        //                 << "bytes";
     }
 }
 
@@ -312,8 +284,13 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
         int x, y;
         getRealXY(info, x, y);
         MouseSimulator::getInstance()->moveMouse(x, y);
-        qDebug() << "Client" << client->peerAddress().toString() << "mouse move to:" << info.mouseX << ","
-                 << info.mouseY << " wh=" << info.screenWidth << "x" << info.screenHeight;
+        QString logStr = QString("Client %1 mouse move to: %2,%3 wh=%4x%5")
+                             .arg(client->peerAddress().toString())  // %1: 客户端地址
+                             .arg(info.mouseX)                       // %2: 鼠标X坐标
+                             .arg(info.mouseY)                       // %3: 鼠标Y坐标
+                             .arg(info.screenWidth)                  // %4: 屏幕宽度
+                             .arg(info.screenHeight);                // %5: 屏幕高度
+        LOG_MESSAGE("Asrv", logStr)
     }
     // 处理鼠标点击
     else if (type == "mouse_click")
@@ -363,8 +340,10 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
             }
             MouseSimulator::getInstance()->releaseMouse(btn, x, y);
         }
+        QString logStr =
+            QString("Client %1 mouse  %2 %3").arg(client->peerAddress().toString()).arg(button).arg(action);
 
-        qDebug() << "Client" << client->peerAddress().toString() << "mouse" << button << action;
+        LOG_MESSAGE("Asrv", logStr)
     }
     // 新增：处理滚轮事件
     else if (type == "mouse_wheel")
@@ -376,8 +355,13 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
         // 模拟Linux系统滚轮
         MouseSimulator::WheelDirection eDirection = getScrollWhellDirection(direction);
         MouseSimulator::getInstance()->scrollWheel(eDirection, steps);
-        qDebug() << "Client" << client->peerAddress().toString() << "mouse wheel:" << direction << "steps:" << steps
-                 << "at" << x << "," << y;
+        QString logStr = QString("Client %1 mouse wheel: %2 steps: %3 at %4,%5")
+                             .arg(client->peerAddress().toString())  // %1: 客户端地址
+                             .arg(direction)                         // %2: 滚轮方向
+                             .arg(steps)                             // %3: 滚动步数
+                             .arg(x)                                 // %4: X坐标
+                             .arg(y);                                // %5: Y坐标
+        LOG_MESSAGE("Asrv", logStr)
     }
 }
 
@@ -419,7 +403,9 @@ void ScreenServer::handleKeyboardEvent(const QJsonObject &keyboardEvent, QWebSoc
     // 跳过纯组合键的press/release（单独处理组合键状态即可）
     if (keyName == "ctrl" || keyName == "shift" || keyName == "alt" || keyName == "meta")
     {
-        qDebug() << "Client" << client->peerAddress().toString() << "modifier key" << keyStr << action;
+        QString logStr =
+            QString("Client %1 modifier key %2 %3").arg(client->peerAddress().toString()).arg(keyStr).arg(action);
+        LOG_MESSAGE("Asrv", logStr)
         return;
     }
 
@@ -441,18 +427,29 @@ void ScreenServer::handleKeyboardEvent(const QJsonObject &keyboardEvent, QWebSoc
         bool success = simulateKeyWithMask(maskKeys, targetKey);
 
         // 日志输出（补充符号键信息）
-        qDebug() << "Client" << client->peerAddress().toString() << "keyboard press:" << keyStr
-                 << "(original:" << rawKey << ")"
-                 << "modifiers: Ctrl=" << info.isCtrlPressed << " Shift=" << info.isShiftPressed
-                 << " Alt=" << info.isAltPressed << " Meta=" << info.isMetaPressed << " success:" << success;
+        QString logStr =
+            QString(
+                "Client %1 keyboard press: %2 (original: %3) modifiers: Ctrl=%4 Shift=%5 Alt=%6 Meta=%7 success: %8")
+                .arg(client->peerAddress().toString())  // %1: 客户端地址
+                .arg(keyStr)                            // %2: 按键字符串
+                .arg(rawKey)                            // %3: 原始按键值
+                .arg(info.isCtrlPressed)                // %4: Ctrl是否按下
+                .arg(info.isShiftPressed)               // %5: Shift是否按下
+                .arg(info.isAltPressed)                 // %6: Alt是否按下
+                .arg(info.isMetaPressed)                // %7: Meta是否按下
+                .arg(success);                          // %8: 操作是否成功
+        LOG_MESSAGE("Asrv", logStr)
     }
     else if (action == "release")
     {
         bool success = true;
         // 日志输出
-        qDebug() << "Client" << client->peerAddress().toString() << "keyboard release:" << keyStr
-                 << "(original:" << rawKey << ")"
-                 << " success:" << success;
+        QString logStr = QString("Client %1 keyboard release: %2 (original: %3)  success: %4")
+                             .arg(client->peerAddress().toString())  // %1: 客户端地址
+                             .arg(keyStr)                            // %2: 按键字符串
+                             .arg(rawKey)                            // %3: 原始按键值
+                             .arg(success);                          // %4: 操作是否成功
+        LOG_MESSAGE("Asrv", logStr)
     }
 }
 
@@ -485,4 +482,98 @@ MouseSimulator::WheelDirection ScreenServer::getScrollWhellDirection(const QStri
         return MouseSimulator::WheelDirection::WheelRight;
     }
     return MouseSimulator::WheelDirection::WheelNone;
+}
+
+void ScreenServer::drawVirtualMouse(const ClientInfo &info,
+                                    const int         screenWidth,
+                                    const int         screenHeight,
+                                    QPixmap          &pixmap)
+{
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // 转换相对坐标到屏幕绝对坐标
+    int mouseX = info.mouseX * screenWidth / info.screenWidth;  // 前端传的相对宽度=屏幕宽度时直接用
+    int mouseY = info.mouseY * screenHeight / info.screenHeight;
+
+    // 绘制鼠标（箭头样式）
+    int          mouseSize = 20;
+    QPainterPath mousePath;
+    mousePath.moveTo(mouseX, mouseY);
+    mousePath.lineTo(mouseX + mouseSize, mouseY + mouseSize / 2);
+    mousePath.lineTo(mouseX + mouseSize / 3, mouseY + mouseSize);
+    mousePath.lineTo(mouseX, mouseY + mouseSize / 3);
+    mousePath.closeSubpath();
+
+    // 按压状态样式
+    if (info.isLeftPressed)
+    {
+        painter.setBrush(QColor(255, 0, 0, 180));
+        painter.setPen(QPen(Qt::red, 2));
+    }
+    else if (info.isRightPressed)
+    {
+        painter.setBrush(QColor(0, 0, 255, 180));
+        painter.setPen(QPen(Qt::blue, 2));
+    }
+    else
+    {
+        painter.setBrush(QColor(0, 0, 0, 180));
+        painter.setPen(QPen(Qt::black, 2));
+    }
+
+    painter.drawPath(mousePath);
+    // 白色描边增强辨识度
+    painter.setBrush(Qt::transparent);
+    painter.setPen(QPen(Qt::white, 1));
+    painter.drawPath(mousePath);
+}
+
+QRect ScreenServer::calculateDiffRect(const QPixmap &prev, const QPixmap &curr, int threshold)
+{
+    QImage prevImg = prev.toImage().convertToFormat(QImage::Format_RGB888);
+    QImage currImg = curr.toImage().convertToFormat(QImage::Format_RGB888);
+
+    int  width  = prevImg.width();
+    int  height = prevImg.height();
+    int  minX = width, minY = height, maxX = 0, maxY = 0;
+    bool hasDiff = false;
+
+    // 逐像素对比（可优化：按块对比提升性能）
+    for (int y = 0; y < height; y++)
+    {
+        uchar *prevLine = prevImg.scanLine(y);
+        uchar *currLine = currImg.scanLine(y);
+        for (int x = 0; x < width; x++)
+        {
+            // 计算RGB差值
+            int rDiff     = abs(prevLine[x * 3] - currLine[x * 3]);
+            int gDiff     = abs(prevLine[x * 3 + 1] - currLine[x * 3 + 1]);
+            int bDiff     = abs(prevLine[x * 3 + 2] - currLine[x * 3 + 2]);
+            int totalDiff = rDiff + gDiff + bDiff;
+
+            if (totalDiff > threshold)
+            {
+                // 更新差分区域边界
+                minX    = qMin(minX, x);
+                minY    = qMin(minY, y);
+                maxX    = qMax(maxX, x);
+                maxY    = qMax(maxY, y);
+                hasDiff = true;
+            }
+        }
+    }
+
+    if (!hasDiff)
+    {
+        return QRect();  // 无变化
+    }
+
+    // 扩展差分区域（避免边缘截断，可选）
+    minX = qMax(0, minX - 2);
+    minY = qMax(0, minY - 2);
+    maxX = qMin(width - 1, maxX + 2);
+    maxY = qMin(height - 1, maxY + 2);
+
+    return QRect(minX, minY, maxX - minX + 1, maxY - minY + 1);
 }

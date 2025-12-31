@@ -7,12 +7,12 @@
 
 body {
     font-family: Arial, Helvetica, sans-serif;
-    background-color: #f5f5f5;
+    background-color: #1e1e1e;
     padding: 20px;
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
     text-align: center;
 }
@@ -36,13 +36,15 @@ h1 {
     max-width: 100%;
     height: auto;
     border: 1px solid #ccc;
+    background-color: #000000; /* 纯黑色，页面加载必黑屏 */
+    display: block; /* 消除canvas默认底部3px空隙，黑屏无白边，必加 */
 }
 
 /* 状态提示样式 - 调整后 */
 #status {
     position: fixed; /* 固定在右上角 */
     top: 15px;
-    right: 15px;
+    left: 15px;
     padding: 6px 12px; /* 缩小内边距，更紧凑 */
     border-radius: 4px;
     font-size: 12px; /* 缩小字体 */
@@ -70,7 +72,7 @@ h1 {
 /* 系统按键面板样式 */
 .keyboard-panel {
     padding: 12px;
-    background: #f8f9fa;
+    background: transparent;
     border-top: 1px solid #ddd;
     display: flex;
     flex-wrap: wrap;

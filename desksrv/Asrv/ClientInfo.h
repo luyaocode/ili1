@@ -1,6 +1,8 @@
 #ifndef CLIENTINFO_H
 #define CLIENTINFO_H
 #include <QWebSocket>
+#include <QPixmap>
+#include <QRect>
 // 客户端信息结构体
 
 struct ClientInfo
@@ -18,5 +20,11 @@ struct ClientInfo
     bool isShiftPressed = false;
     bool isAltPressed   = false;
     bool isMetaPressed  = false;
+
+    // ========== 新增：每个客户端独立的差分状态 ==========
+    QPixmap prevPixmap;            // 该客户端的上一帧截图（独立存储）
+    QRect   diffRect;              // 该客户端的差分区域
+    bool    isFirstFrame  = true;  // 该客户端是否是第一帧
+    int     diffThreshold = 10;    // 该客户端的像素差异阈值（可按需单独调整）
 };
-#endif // CLIENTINFO_H
+#endif  // CLIENTINFO_H

@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QTextCodec>
+#include <QJsonArray>
 
 #include "commontool/VersionManager.h"
 #include "commontool/UpdateDialog.h"
@@ -54,11 +55,68 @@ bool isAlreadyRunning(const std::string &name)
     }
 
     /* 清空锁文件,然后将当前守护进程pid写入锁文件 */
-    ftruncate(fdLockFile, 0);
+    auto ret = ftruncate(fdLockFile, 0);
+    (void)ret;
     sprintf(szPid, "%ld", (long)getpid());
-    write(fdLockFile, szPid, strlen(szPid) + 1);
+    ret = write(fdLockFile, szPid, strlen(szPid) + 1);
+    (void)ret;
 
     return false;
+}
+
+// 全局日志处理函数：自动添加线程ID、时间、日志级别
+void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    Q_UNUSED(context)
+    // 1. 获取当前时间（格式：yyyy-MM-dd hh:mm:ss.zzz）
+    QString time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
+
+    // 2. 获取线程名称ID
+    QString       tname;
+    unsigned long thread_id = reinterpret_cast<unsigned long>(pthread_self());
+    tname                   = QString::number(thread_id);
+
+    // 3. 日志级别字符串
+    QString level;
+    QString logText;
+    switch (type)
+    {
+        case QtDebugMsg:
+            level = "DEBUG";
+            break;
+        case QtInfoMsg:
+        {
+            level   = "INFO";
+            logText = msg;
+            break;
+        }
+        case QtWarningMsg:
+            level = "WARN";
+            break;
+        case QtCriticalMsg:
+            level = "ERROR";
+            break;
+        case QtFatalMsg:
+            level = "FATAL";
+            break;
+    }
+    if (logText.isEmpty())
+    {
+        // 4. 格式化日志并输出到控制台
+        logText = QString("[%1] %2 [%3] %4")
+                      .arg(tname)  // 线程ID
+                      .arg(time)   // 时间
+                      .arg(level)  // 级别
+                      .arg(msg);   // 日志内容
+    }
+
+    QTextStream(stdout) << logText << endl;
+
+    // 致命错误时终止程序（保持Qt默认行为）
+    if (type == QtFatalMsg)
+    {
+        abort();
+    }
 }
 
 int main(int argc, char *argv[])
@@ -70,6 +128,9 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
 
+    // 注册日志监听
+    qInstallMessageHandler(customMessageHandler);
+
     // ========== 新增：版本更新检查 ==========
     VersionManager versionMgr;
     // 读取版本配置文件
@@ -77,15 +138,34 @@ int main(int argc, char *argv[])
     // ========== 新增：打印版本信息 ==========
     QString currentVersion = versionInfo["currentVersion"].toString();
     QString latestVersion  = versionInfo["latestVersion"].toString();
+    QString updateContent;
+    if (versionInfo["updateContent"].isArray())
+    {  // 先判断是否为数组
+        QJsonArray contentArray = versionInfo["updateContent"].toArray();
+        // 方式1：拼接数组为单个字符串（如换行分隔）
+        QStringList contentList;
+        for (const QJsonValue &value : contentArray)
+        {
+            contentList.append(value.toString());  // 逐个提取数组中的字符串
+        }
+        updateContent = contentList.join("\n");  // 用换行拼接成一个字符串
+    }
+    else
+    {
+        updateContent = versionInfo["updateContent"].toString();
+    }
     // 打印到控制台（qDebug）
+    qDebug() << "==============================================================";
     qDebug() << "[版本检查] 当前程序版本：" << currentVersion;
     qDebug() << "[版本检查] 最新配置版本：" << latestVersion;
+    qDebug() << "[版本检查] 更新内容：" << updateContent;
+    qDebug() << "==============================================================";
 
-    UpdateDialog* updateDlg = new UpdateDialog(versionInfo);
-    updateDlg->setAttribute(Qt::WA_DeleteOnClose); // 关闭弹窗时自动释放内存
-    a.setQuitOnLastWindowClosed(false);
-    updateDlg->setModal(false);
-    updateDlg->show();
+    //    UpdateDialog* updateDlg = new UpdateDialog(versionInfo);
+    //    updateDlg->setAttribute(Qt::WA_DeleteOnClose); // 关闭弹窗时自动释放内存
+    //    a.setQuitOnLastWindowClosed(false);
+    //    updateDlg->setModal(false);
+    //    updateDlg->show();
 
     QString ip   = IP_ADDR;
     quint16 port = IP_PORT;

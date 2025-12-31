@@ -13,11 +13,13 @@ Environment="DISPLAY=:0"
 Environment="XAUTHORITY=%h/.Xauthority"
 Environment="QT_PLUGIN_PATH=%APP_PATH%/plugins:$QT_PLUGIN_PATH"
 Environment="LD_LIBRARY_PATH=%APP_PATH%/lib:$LD_LIBRARY_PATH"
+# 启动前等待2秒
+ExecStartPre=/bin/sleep 2
 ExecStart=/usr/bin/monitor
 StandardOutput=append:/data/logs/monitor/stdout.log
 StandardError=append:/data/logs/monitor/stderr.log
 Restart=on-failure
-#Restart=no
+Restart=always
 RestartSec=5
 [Install]
 WantedBy=graphical.target

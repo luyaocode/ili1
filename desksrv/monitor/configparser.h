@@ -25,7 +25,7 @@ struct MonitorConfig
     QList<double> reminderTimes;
 
     // eyesprotector容忍时间
-    int eyes_tolerance_minutes;
+    int eyes_tolerance_minutes = 0;
 
     // 构造函数初始化默认值
     MonitorConfig(): toleranceMinutes(0), toleranceMinutesDay(0), monitorMouse(false), monitorKeyboard(false)

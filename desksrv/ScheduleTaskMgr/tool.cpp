@@ -35,7 +35,7 @@ void createConfigFile(const QString &filePath)
 
     ScheduleItem        item2;
     item2.enable                = true;
-    item2.path                  = "reminder cornerpopup 1h...";
+    item2.path                  = "reminder11 cornerpopup 1h...";
     item2.taskConfig.taskName   = "cornerpopup";
     item2.taskConfig.type       = TaskType::Interval;
     item2.taskConfig.intervalSec = 3600;
