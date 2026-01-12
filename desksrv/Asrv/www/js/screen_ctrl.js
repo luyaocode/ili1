@@ -1,5 +1,6 @@
 // 配置项
-const WS_HOST = "{{WS_HOST}}";
+const currentScript = document.currentScript;
+const wsUrl = currentScript.dataset.wsurl
 
 // 全局变量
 let ws = null;
@@ -13,6 +14,14 @@ let isCanvasActive = false; // 标记鼠标是否在screenCanvas区域内
 // 全局变量新增
 let prevCanvasData = null; // 上一帧Canvas数据，用于绘制差分
 let isFirstFrame = true;   // 是否是第一帧
+
+// ========== 新增：设置弹窗==========
+let currentQuality = 'png_lossless'; // 默认PNG无损
+const settingsModal = document.getElementById('settingsModal');
+const qualitySelect = document.getElementById('qualitySelect');
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+const settingsCloseBtn = document.querySelector('.settings-close');
+const settingsMenuItem = document.querySelector('.sidebar-menu-item:nth-child(3)'); // 匹配"设置"菜单项
 
 // 键盘状态跟踪：记录组合键是否按下
 const keyState = {
@@ -35,7 +44,7 @@ function initWebSocket() {
     prevCanvasData = null;
 
     // 创建新连接
-    ws = new WebSocket(WS_HOST);
+    ws = new WebSocket(wsUrl);
 
     // 存储当前帧的元信息（宽高）
     let currentFrameMeta = null;
@@ -58,18 +67,27 @@ function initWebSocket() {
             }
         } else {
             // 处理文本JSON消息
-            const data = JSON.parse(event.data);
-            if (data.type === 'screen_frame_meta') {
-                // 修复点6：为所有字段设置默认值，避免首帧解析错误
-                currentFrameMeta = {
-                    width: data.width || canvas.width || 1920,
-                    height: data.height || canvas.height || 1080,
-                    diff_x: data.diff_x || 0,
-                    diff_y: data.diff_y || 0,
-                    diff_w: data.diff_w || (data.width || 1920),
-                    diff_h: data.diff_h || (data.height || 1080),
-                    is_full: data.is_full || false
-                };
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'screen_frame_meta') {
+                    // 修复点6：为所有字段设置默认值，避免首帧解析错误
+                    currentFrameMeta = {
+                        width: data.width || canvas.width || 1920,
+                        height: data.height || canvas.height || 1080,
+                        diff_x: data.diff_x || 0,
+                        diff_y: data.diff_y || 0,
+                        diff_w: data.diff_w || (data.width || 1920),
+                        diff_h: data.diff_h || (data.height || 1080),
+                        is_full: data.is_full || false
+                    };
+                } else {
+                    // 其他type的消息直接打印（增强日志可读性）
+                    console.log(`[info]: ${data.type}，内容:`, data);
+                }
+            } catch (e) {
+                // 兼容非JSON格式的文本消息
+                console.log(`[info]:`, event.data);
+                console.error('JSON解析失败:', e);
             }
         }
     };
@@ -148,6 +166,56 @@ function renderJpegFrame(blob, meta) {
     };
 
     img.src = imgUrl;
+}
+
+// ========== 新增：设置弹窗事件 ==========
+function initSettingsModal() {
+    // 点击设置菜单打开弹窗
+    settingsMenuItem.addEventListener('click', () => {
+        settingsModal.style.display = 'block';
+        // 恢复当前选中的画质选项
+        qualitySelect.value = currentQuality;
+    });
+    // 关闭弹窗
+    settingsCloseBtn.addEventListener('click', () => {
+        settingsModal.style.display = 'none';
+    });
+
+    // 点击弹窗外区域关闭
+    window.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.style.display = 'none';
+        }
+    });
+
+    // 保存设置并发送给后端
+    saveSettingsBtn.addEventListener('click', () => {
+        const selectedQuality = qualitySelect.value;
+        currentQuality = selectedQuality;
+
+        // 构造画质设置消息
+        const qualityMsg = {
+            type: 'screen_quality',
+            quality: selectedQuality,
+            // 可选：传递对应参数（供后端解析）
+            params: {
+                jpeg_high: { format: 'JPEG', quality: 95 },
+                jpeg_lossless: { format: 'JPEG', quality: 100, chroma_subsampling: '4:4:4' },
+                png_lossless: { format: 'PNG', compression: 2 }
+            }[selectedQuality]
+        };
+
+        // 通过WebSocket发送给后端
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(qualityMsg));
+            console.log('发送画质设置:', qualityMsg);
+        } else {
+            alert('未连接到服务器，无法保存设置');
+        }
+
+        // 关闭弹窗
+        settingsModal.style.display = 'none';
+    });
 }
 
 
@@ -621,6 +689,7 @@ window.onload = () => {
     initMouseEvents();
     initKeyboardEvents(); // 初始化键盘监听
     initKeyButtonEvents(); // 初始化快捷键
+    initSettingsModal(); // 初始化设置弹窗
 };
 
 // 页面关闭时清理连接

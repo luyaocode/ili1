@@ -32,6 +32,7 @@
 #include "def.h"
 #include "Server.h"
 #include "widget/NotifyPopup.h"
+#include "commontool/screenshooter.h"
 
 TcpServer::TcpServer(QObject *parent): QTcpServer(parent)
 {
@@ -274,19 +275,6 @@ bool TcpServer::handleStaticResource(const QString &requestPath, QTcpSocket *soc
     {
         QMap<QString, QString> replaceMap;
         QString                strWsAddr = "ws://" + getLocalIpv4() + ":" + QString::number(Server::getWsPort());
-        replaceMap["WS_HOST"]            = strWsAddr;
-        QString contentStr               = QString(fileContent);
-        for (auto it = replaceMap.constBegin(); it != replaceMap.constEnd(); ++it)
-        {
-            contentStr.replace("{{" + it.key() + "}}", it.value());
-        }
-
-        fileContent = contentStr.toUtf8();
-    }
-    else if(fileName == "screen_ctrl.js")
-    {
-        QMap<QString, QString> replaceMap;
-        QString                strWsAddr = "ws://" + getLocalIpv4() + ":" + QString::number(Server::getScreenServerPort());
         replaceMap["WS_HOST"]            = strWsAddr;
         QString contentStr               = QString(fileContent);
         for (auto it = replaceMap.constBegin(); it != replaceMap.constEnd(); ++it)
@@ -963,10 +951,26 @@ bool TcpServer::handleScreenCtrl(const QString &requestPath, QTcpSocket *socket)
     {
         return false;
     }
+    // ===================== 核心新增：解析前端传入的【屏幕索引】 =====================
+    int targetScreenIdx = DEFAULT_SCREEN_IDX;  // 默认值：主屏
+    // 截取指令前缀后的部分，得到纯索引字符串 例：/$$scc/1 → "1"
+    QString idxStr = requestPath.mid(REQ_SCREEN_CTRL.size() + 1);
+    // 字符串转数字，严格校验是否为合法整数
+    bool bOk     = false;
+    int  tempIdx = idxStr.toInt(&bOk);
+    if (bOk)
+    {
+        targetScreenIdx = tempIdx;
+    }
+
+    // ===================== 核心新增：拼接WebSocket地址 + 携带屏幕索引参数 =====================
     QMap<QString, QString> replaceMap;
-    //    QString                strWsAddr = "ws://" + getLocalIpv4() + ":" + QString::number(Server::getWsPort());
-    //    replaceMap["WS_HOST"]            = strWsAddr;
-    auto content = readTemplate("screen_ctrl.html", replaceMap);
+    QString                localIp = getLocalIpv4();       // 你的原有函数：获取本机IPv4地址
+    quint16                wsPort  = Server::getScreenServerPort();  // 你的原有函数：获取WebSocket服务端口
+    // 拼接WS地址：ws://本机IP:端口?screenIdx=目标索引
+    QString strWsAddr     = QString("ws://%1:%2/screen/%3").arg(localIp).arg(wsPort).arg(targetScreenIdx);
+    replaceMap["WS_HOST"] = strWsAddr;  // 传给HTML模板的WS地址变量
+    auto content          = readTemplate("screen_ctrl.html", replaceMap);
     // 构建HTTP响应
     QByteArray response;
     response += "HTTP/1.1 200 OK\r\n";

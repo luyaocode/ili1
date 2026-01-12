@@ -27,7 +27,8 @@ SOURCES += main.cpp \
     Server.cpp \
     widget/NotifyPopup.cpp \
     ScreenServer.cpp \
-    x11tool.cpp
+    x11tool.cpp \
+    ClientInfo.cpp
 
 HEADERS += \
     tool.h \
@@ -42,6 +43,10 @@ HEADERS += \
     ClientInfo.h
 
 LIBS += -lutil
+
+LIBS += -lopencv_core -lopencv_dnn -lopencv_features2d -lopencv_flann -lopencv_imgcodecs \
+        -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_objdetect -lopencv_photo -lopencv_shape \
+        -lopencv_stitching -lopencv_superres -lopencv_videoio -lopencv_video -lopencv_videostab
 
 DISTFILES += \
     www/css/style.css\

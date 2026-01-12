@@ -42,6 +42,8 @@ private slots:
     // 新增：处理鼠标事件
     void handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *client);
     void handleKeyboardEvent(const QJsonObject &mouseEvent, QWebSocket *client);
+    // 处理设置事件
+    void handleSettingEvent(const QJsonObject &event, QWebSocket *client);
 
 private:
     QWebSocketServer              *m_wsServer = nullptr;
@@ -50,16 +52,13 @@ private:
     QTimer                        *m_captureTimer = nullptr;       // 截屏定时器
     QMap<QWebSocket *, ClientInfo> m_clientMap;                    // 客户端映射
     QProcess                      *m_screenshotProcess = nullptr;  // 截屏进程
-
-//    QPixmap m_prevPixmap;            // 上一帧截图，用于差分对比
-//    QRect   m_diffRect;              // 差分区域（需要更新的矩形）
-//    bool    m_isFirstFrame  = true;  // 是否是第一帧（第一帧需发送全屏）
-//    int     m_diffThreshold = 10;    // 像素差异阈值（可调整，值越小越灵敏）
 private:
     void                           getRealXY(const ClientInfo &info, int &x, int &y);
     MouseSimulator::WheelDirection getScrollWhellDirection(const QString &direction);
     void  drawVirtualMouse(const ClientInfo &info, const int screenWidth, const int screenHeight, QPixmap &pixmap);
     QRect calculateDiffRect(const QPixmap &prev, const QPixmap &curr, int threshold);
+    // 高清图片编码函数
+    QByteArray encodeHdImage(const QImage &image, HdLevel level);
 };
 
 #endif  // SCREENSERVER_H

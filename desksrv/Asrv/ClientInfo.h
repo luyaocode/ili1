@@ -5,6 +5,16 @@
 #include <QRect>
 // 客户端信息结构体
 
+// 高清级别枚举
+enum HdLevel {
+    HdLevel_JpegHigh = 0,  // JPEG高质量（95%）
+    HdLevel_JpegLossless,  // JPEG无损（100%+无采样）
+    HdLevel_PngLossless    // PNG无损
+};
+
+QString getHdLevelString(HdLevel level);
+HdLevel getHdLevelFromString(const QString& level);
+
 struct ClientInfo
 {
     QWebSocket *socket;                   // 客户端连接
@@ -26,5 +36,8 @@ struct ClientInfo
     QRect   diffRect;              // 该客户端的差分区域
     bool    isFirstFrame  = true;  // 该客户端是否是第一帧
     int     diffThreshold = 10;    // 该客户端的像素差异阈值（可按需单独调整）
+
+    HdLevel hdLevel = HdLevel::HdLevel_PngLossless;
+    int screenIndex = 0;
 };
 #endif  // CLIENTINFO_H

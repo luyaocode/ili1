@@ -47,7 +47,8 @@ fi
 echo "===== 单个文件的统计结果 ====="
 echo -e "总行数\t有效行数\t\t文件路径"  # 数字列在前，文件名在后，两个\t分隔
 echo "--------------------------------------------------------"
-cat "$FILE_STATS" | while IFS='|' read -r full_path rel_path total effective; do
+# 先排序（按总行数降序），再逐行读取输出
+cat "$FILE_STATS" | sort -t'|' -k3,3nr | while IFS='|' read -r full_path rel_path total effective; do
     echo -e "$total\t$effective\t\t$rel_path"  # 数字列在前，两个\t分隔
 done
 echo "--------------------------------------------------------"

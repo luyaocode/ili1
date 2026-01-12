@@ -10,6 +10,8 @@
 #include <future>  // 引入std::future/std::async
 #include <memory>  // 智能指针
 
+struct _XDisplay;
+typedef struct _XDisplay Display;
 // Linux DRM/X11截屏工具类（单例 + 异步截屏 + 多线程安全）
 // 优先使用DRM（GPU帧缓冲区）截屏，失败则回退到X11共享内存方案
 class ScreenShooter : public QObject
@@ -28,10 +30,12 @@ public:
     static ScreenShooter *instance();
 
     // 异步截屏接口：返回std::future<QPixmap>，非阻塞
-    std::future<QPixmap> captureScreenAsync();
+    std::future<QList<QPixmap>> captureScreenAsync(bool multi = false);
 
-    // 同步截屏接口（兼容原有逻辑，加锁保护）
-    QPixmap captureScreen();
+    // 同步截屏接口（兼容原有逻辑，加锁保护） 默认单屏幕
+    QList<QPixmap> captureScreen(bool multi = false);
+
+    int screenCount() const;
 
     // 获取屏幕分辨率（截屏前调用有效）
     int screenWidth() const
@@ -64,7 +68,7 @@ private:
     };
 
     // 内部同步截屏实现（供异步接口调用）
-    QPixmap captureScreenInternal();
+    QList<QPixmap> captureScreenInternal(bool multi);
 
     // DRM初始化/清理
     bool initDrmDevice();
@@ -74,8 +78,11 @@ private:
     void cleanupDrmDevice();
 
     // 底层截屏实现
-    QPixmap captureScreenDrm();
-    QPixmap captureScreenX11();
+    QPixmap        captureScreenDrm();
+    QList<QPixmap> captureScreenX11(bool multi);
+    QPixmap        captureAllScreensQt();
+    QPixmap        capturePrimaryScreenQt();
+    QPixmap        captureSingleX11Screen(Display *display, int screen, int width, int height);
 
 private:
     // ======== 单例相关静态成员 ========
@@ -84,7 +91,7 @@ private:
 
     // ======== 线程安全相关成员 ========
     mutable QMutex m_captureMutex;       // 截屏操作锁（mutable允许const函数使用）
-    QPixmap        m_lastFrame;          // 截图缓存（优化高频调用）
+    QList<QPixmap> m_lastFrames;          // 截图缓存（优化高频调用）
     QDateTime      m_lastCaptureTime;    // 最后截屏时间
     const int      m_cacheTimeout = 50;  // 缓存超时（毫秒）
 

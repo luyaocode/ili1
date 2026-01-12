@@ -81,12 +81,12 @@ public:
     bool pressMouse(MouseButton button, int x = -1, int y = -1);
 
     /**
-         * 鼠标释放函数（需与pressMouse配对使用）
-         * @param button 鼠标按键（必须和pressMouse的按键一致）
-         * @param x 目标X坐标（-1表示不移动，使用当前位置；建议和pressMouse坐标一致）
-         * @param y 目标Y坐标（-1表示不移动，使用当前位置；建议和pressMouse坐标一致）
-         * @return 释放是否成功
-         */
+     * 鼠标释放函数（需与pressMouse配对使用）
+     * @param button 鼠标按键（必须和pressMouse的按键一致）
+     * @param x 目标X坐标（-1表示不移动，使用当前位置；建议和pressMouse坐标一致）
+     * @param y 目标Y坐标（-1表示不移动，使用当前位置；建议和pressMouse坐标一致）
+     * @return 释放是否成功
+     */
     bool releaseMouse(MouseButton button, int x = -1, int y = -1);
 
     /**
@@ -129,6 +129,13 @@ public:
      */
     bool getCurrentMousePos(int &x, int &y);
 
+    // 新增：鼠标按钮枚举保持不变，新增【多屏核心函数】
+    bool moveMouse(int screenIdx, int localX, int localY);             // 根据屏幕索引+本地坐标移动
+    bool clickMouse(MouseButton button, int screenIdx, int x, int y);  // 根据屏幕索引+本地坐标点击
+    bool pressMouse(MouseButton button, int screenIdx, int x, int y);
+    bool releaseMouse(MouseButton button, int screenIdx, int x, int y);
+    bool doubleClickMouse(MouseButton button, int screenIdx, int x, int y, int interval = 200);
+
 private:
     explicit MouseSimulator(QObject *parent = nullptr);
     ~MouseSimulator() override;
@@ -137,9 +144,15 @@ private:
     MouseSimulator(const MouseSimulator &)            = delete;
     MouseSimulator &operator=(const MouseSimulator &) = delete;
 
+    // 新增：多屏核心工具函数 - 根据屏幕索引，获取该屏幕的【全局偏移+分辨率】，返回QRect(x偏移,y偏移,宽,高)
+    QRect getScreenRectByIndex(int screenIdx) const;
+    // 新增：多屏核心工具函数 - 本地坐标 → 全局坐标 转换
+    void localToGlobal(int screenIdx, int &localX, int &localY, int &globalX, int &globalY) const;
+
+private:
     x11struct             *m_x11struct;  // X11显示连接（核心句柄）
     static MouseSimulator *m_instance;   // 单例实例
-    static QMutex m_mutex;
+    static QMutex          m_mutex;
     //    VirtualMouseWidget    *m_virtualMouseWidget;  // 新增：虚拟鼠标绘制窗口
 };
 

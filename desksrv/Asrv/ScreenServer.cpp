@@ -4,11 +4,15 @@
 #include <QImage>
 #include <QApplication>
 #include <QThread>
+#include <QImageWriter>
+#include <QUrlQuery>
 
+#include "commontool/imagetool.h"
 #include "commontool/globaltool.h"
 #include "x11tool.h"
 #include "commontool/screenshooter.h"
 #include "commontool/globaldef.h"
+#include "def.h"
 
 ScreenServer::ScreenServer(QObject *parent): QObject(parent)
 {
@@ -100,8 +104,30 @@ void ScreenServer::onNewConnection()
     info.socket = client;
     // 可自定义该客户端的差分阈值（如低带宽客户端调大阈值）
     info.diffThreshold = 10;
-    m_clientMap.insert(client, info);
 
+    QString requestPath = client->requestUrl().path();  // 获取请求路径：/screen/0
+    int     screenIdx   = 0;                            // 默认主屏
+    // 切割路径，解析参数
+    QStringList pathParts = requestPath.split("/", QString::SkipEmptyParts);
+    if (pathParts.size() >= 2 && pathParts.at(0) == "screen")
+    {
+        bool ok   = false;
+        screenIdx = pathParts.at(1).toInt(&ok);
+        if (!ok)
+            screenIdx = 0;
+    }
+    qDebug() << "前端WS连接成功，解析到屏幕索引：" << screenIdx;
+    qDebug() << "屏幕个数: " << ScreenShooter::instance()->screenCount();
+
+//    // 索引合法性校验：越界则返回主屏
+//    if ((screenIdx < 0 && screenIdx != -1) || screenIdx >= ScreenShooter::instance()->screenCount())
+//    {
+//        screenIdx = DEFAULT_SCREEN_IDX;
+//    }
+    info.screenIndex = screenIdx;
+//    qDebug() << "实际屏幕索引：" << screenIdx;
+
+    m_clientMap.insert(client, info);
     // 连接客户端信号
     connect(client, &QWebSocket::disconnected, this, &ScreenServer::onClientDisconnected);
     connect(client, &QWebSocket::textMessageReceived, this, &ScreenServer::onTextMessageReceived);
@@ -136,14 +162,19 @@ void ScreenServer::onTextMessageReceived(const QString &message)
         return;
     }
 
-    QJsonObject jsonObj = jsonDoc.object();
-    if (jsonObj["type"].toString().contains("mouse"))
+    QJsonObject jsonObj      = jsonDoc.object();
+    QString     strEventType = jsonObj["type"].toString();
+    if (strEventType.contains("mouse"))
     {
         handleMouseEvent(jsonObj, client);
     }
-    else if (jsonObj["type"].toString().contains("keyboard"))
+    else if (strEventType.contains("keyboard"))
     {
         handleKeyboardEvent(jsonObj, client);
+    }
+    else
+    {
+        handleSettingEvent(jsonObj, client);
     }
 }
 
@@ -198,15 +229,34 @@ void ScreenServer::captureScreenAndPush()
     }
 
     // 1. 截取当前屏幕
-    std::future<QPixmap> pixmapFuture       = ScreenShooter::instance()->captureScreenAsync();
-    QPixmap              currPixmap         = pixmapFuture.get();
-    int                  globalScreenWidth  = currPixmap.width();
-    int                  globalScreenHeight = currPixmap.height();
+    std::future<QList<QPixmap>> pixmapFuture = ScreenShooter::instance()->captureScreenAsync(true);
+    QList<QPixmap>              currPixmaps  = pixmapFuture.get();
+    if (currPixmaps.isEmpty())
+    {
+        return;
+    }
     // 5. 为每个客户端推送差分数据
     for (auto client : m_clientMap.keys())
     {
         ClientInfo &info = m_clientMap[client];  // 单个客户端的专属状态
         QRect       diffRect;
+        QPixmap     currPixmap;
+        int         screenIndex = info.screenIndex;
+        if (screenIndex < 0)
+        {
+            if (screenIndex == -1)
+            {
+                // TODO: 全屏幕
+                screenIndex = 0;
+            }
+        }
+        else if (screenIndex >= currPixmaps.size())
+        {
+            continue;
+        }
+        currPixmap             = currPixmaps[screenIndex];
+        int globalScreenWidth  = currPixmap.width();
+        int globalScreenHeight = currPixmap.height();
 
         // 2.1 该客户端的差分区域计算（独立判断首帧）
         if (info.isFirstFrame || info.prevPixmap.isNull() || info.prevPixmap.size() != currPixmap.size())
@@ -235,7 +285,7 @@ void ScreenServer::captureScreenAndPush()
         if (diffRect.contains(info.mouseX, info.mouseY))
         {
             // 差分传输 鼠标会有残影
-//            drawVirtualMouse(info, globalScreenWidth, globalScreenHeight, clientPixmap);
+            //            drawVirtualMouse(info, globalScreenWidth, globalScreenHeight, clientPixmap);
         }
 
         // 2.4 构造该客户端的差分帧信息
@@ -254,11 +304,8 @@ void ScreenServer::captureScreenAndPush()
         sendMessageToClient(client, infoDoc.toJson(QJsonDocument::Compact));
 
         QImage     diffImage = clientPixmap.toImage();
-        QByteArray jpegData;
-        QBuffer    buffer(&jpegData);
-        buffer.open(QIODevice::WriteOnly);
-        diffImage.save(&buffer, "JPEG", 100);
-        sendBinaryToClient(client, jpegData);
+        QByteArray hdData    = encodeHdImage(diffImage, info.hdLevel);
+        sendBinaryToClient(client, hdData);
     }
 }
 
@@ -283,7 +330,7 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
         // 模拟移动
         int x, y;
         getRealXY(info, x, y);
-        MouseSimulator::getInstance()->moveMouse(x, y);
+        MouseSimulator::getInstance()->moveMouse(info.screenIndex, x, y);
         QString logStr = QString("Client %1 mouse move to: %2,%3 wh=%4x%5")
                              .arg(client->peerAddress().toString())  // %1: 客户端地址
                              .arg(info.mouseX)                       // %2: 鼠标X坐标
@@ -319,7 +366,7 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
                 info.isMiddlePressed = pressed;
                 btn                  = MouseSimulator::MouseButton::MiddleButton;
             }
-            MouseSimulator::getInstance()->pressMouse(btn, x, y);
+            MouseSimulator::getInstance()->pressMouse(btn, info.screenIndex, x, y);
         }
         else
         {
@@ -338,7 +385,7 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
                 info.isMiddlePressed = pressed;
                 btn                  = MouseSimulator::MouseButton::MiddleButton;
             }
-            MouseSimulator::getInstance()->releaseMouse(btn, x, y);
+            MouseSimulator::getInstance()->releaseMouse(btn, info.screenIndex, x, y);
         }
         QString logStr =
             QString("Client %1 mouse  %2 %3").arg(client->peerAddress().toString()).arg(button).arg(action);
@@ -450,6 +497,38 @@ void ScreenServer::handleKeyboardEvent(const QJsonObject &keyboardEvent, QWebSoc
                              .arg(rawKey)                            // %3: 原始按键值
                              .arg(success);                          // %4: 操作是否成功
         LOG_MESSAGE("Asrv", logStr)
+    }
+}
+
+void ScreenServer::handleSettingEvent(const QJsonObject &event, QWebSocket *client)
+{
+    // 校验客户端有效性
+    if (!client || !m_clientMap.contains(client))
+    {
+        qWarning() << "Invalid client for keyboard event";
+        return;
+    }
+
+    ClientInfo &info = m_clientMap[client];
+    QString     type = event["type"].toString();
+    if (type.contains("screen_quality"))
+    {
+        // 2. 解析前端发送的画质参数
+        QString qualityType = event["quality"].toString();
+        HdLevel level       = getHdLevelFromString(qualityType);
+        info.hdLevel        = level;
+        info.isFirstFrame   = true;
+        info.prevPixmap     = QPixmap();
+        qInfo() << "Client" << client << "quality switch to:" << qualityType;
+
+        QJsonObject response;
+        response["type"]    = "setting_ack";
+        response["status"]  = "success";
+        response["quality"] = qualityType;
+        response["message"] = QString("画质已切换为：%1").arg(qualityType);
+
+        // 发送确认消息
+        client->sendTextMessage(QJsonDocument(response).toJson(QJsonDocument::Compact));
     }
 }
 
@@ -576,4 +655,43 @@ QRect ScreenServer::calculateDiffRect(const QPixmap &prev, const QPixmap &curr, 
     maxY = qMin(height - 1, maxY + 2);
 
     return QRect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+}
+
+QByteArray ScreenServer::encodeHdImage(const QImage &image, HdLevel level)
+{
+    QByteArray data;
+    QBuffer    buffer(&data);
+    if (!buffer.open(QIODevice::WriteOnly))
+    {  // 增加异常处理，提升健壮性
+        return QByteArray();
+    }
+
+    QImageWriter writer;        // 先默认构造
+    writer.setDevice(&buffer);  // 单独设置设备
+
+    // 根据高清级别配置格式和参数
+    switch (level)
+    {
+        case HdLevel_JpegHigh:
+            writer.setFormat("JPEG");
+            writer.setQuality(80);
+            break;
+        case HdLevel_JpegLossless:
+            writer.setFormat("JPEG");
+            writer.setQuality(100);  // 最高质量
+            // 禁用色度子采样（解决JPEG模糊的核心参数）
+            writer.setText("chroma_subsampling", "4:4:4");
+            break;
+        case HdLevel_PngLossless:
+            writer.setFormat("PNG");
+            writer.setCompression(2);  // 轻度压缩，速度更快，画质无损
+            break;
+    }
+
+    // 开启写入优化，提升高清图片编码效率
+    writer.setOptimizedWrite(true);
+    writer.write(image);
+
+    buffer.close();  // 显式关闭缓冲区，确保数据完整
+    return data;
 }

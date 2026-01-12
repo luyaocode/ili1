@@ -44,7 +44,8 @@ SOURCES += \
     virtualmousewidget.cpp \
     VersionManager.cpp \
     UpdateDialog.cpp \
-    screenshooter.cpp
+    screenshooter.cpp \
+    imagetool.cpp
 
 HEADERS += \
         commontool.h \
@@ -60,9 +61,15 @@ HEADERS += \
     UpdateDialog.h \
     drmstruct.h \
     screenshooter.h \
-    globaldef.h
+    globaldef.h \
+    imagetool.h
 
-LIBS += -lX11 -lXtst -ldrm -lpthread
+LIBS += -lX11 -lXtst -ldrm -lpthread -lXinerama -lXrandr
+
+# 链接 OpenCV2 核心库（根据实际安装的模块调整）
+LIBS += -lopencv_core -lopencv_dnn -lopencv_features2d -lopencv_flann -lopencv_imgcodecs \
+        -lopencv_highgui -lopencv_imgproc -lopencv_ml -lopencv_objdetect -lopencv_photo -lopencv_shape \
+        -lopencv_stitching -lopencv_superres -lopencv_videoio -lopencv_video -lopencv_videostab
 
 DESTDIR =  $$(HOME)/target_dir/desksrv
 # 不存在目标目录就先创建

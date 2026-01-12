@@ -33,6 +33,7 @@ static const QMap<QString, QString> MIME_MAP = []() -> QMap<QString, QString> {
 #define ROOT_DIR "~"
 #define IP_ADDR "0.0.0.0"
 #define IP_PORT 8080
+#define DEFAULT_SCREEN_IDX 0
 
 // 定义预览文件的大小阈值（单位：字节，示例为10MB，可根据需求调整）
 // 1MB = 1024 * 1024 字节，10MB = 10 * 1024 * 1024
@@ -47,7 +48,6 @@ const int MAX_REQUEST_SIZE = 200 * 1024 * 1024;
 #define REQ_CTRL QS("/$$ctrl")
 #define REQ_XTERM QS("/$$xterm")
 #define REQ_SCREEN_CTRL QS("/$$scc")
-
 
 
 

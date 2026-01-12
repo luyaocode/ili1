@@ -98,9 +98,28 @@
                 <div id="terminal"></div>
             </div>
         </div>
+
+        <!-- 新增：设置弹窗 -->
+        <div class="settings-modal" id="settingsModal">
+            <div class="settings-modal-content">
+                <span class="settings-close">&times;</span>
+                <h3>远程控制设置</h3>
+                <div class="settings-item">
+                    <label for="qualitySelect">画面质量：</label>
+                    <select id="qualitySelect">
+                        <option value="jpeg_high">JPEG高质量（80%）</option>
+                        <option value="jpeg_lossless">JPEG无损（100%）</option>
+                        <option value="png_lossless" selected>PNG无损（最高清）</option>
+                    </select>
+                </div>
+                <button id="saveSettingsBtn">保存设置</button>
+            </div>
+        </div>
     </div>
     <!-- 引入JS -->
-    <script src="/js/screen_ctrl.js"></script>
+    <script src="/js/screen_ctrl.js"
+            data-wsUrl="{{WS_HOST}}">
+    </script>
     <script src="/js/xtermpage.js"></script>
     <script src="/js/control.js"></script>
 </body>
