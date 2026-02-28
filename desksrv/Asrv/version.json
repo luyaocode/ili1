@@ -1,5 +1,15 @@
 [
     {
+        "currentVersion": "1.0.3",
+        "latestVersion": "1.0.3",
+        "updateTitle": "更新说明",
+        "updateContent": [
+            "1. 支持多屏显示/控制，通过/$scc/n指定屏幕，默认显示主屏",
+            "2. 优化图像对比函数"
+        ],
+        "forceUpdate": true
+    },
+    {
         "currentVersion": "1.0.1",
         "latestVersion": "1.0.2",
         "updateTitle": "V1.0.2 更新说明",

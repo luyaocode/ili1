@@ -700,7 +700,7 @@ QList<QPixmap> ScreenShooter::captureScreenX11(bool multi)
     }
 
     // 修复：获取虚拟桌面的真实总尺寸（原代码可能获取错误，导致副屏裁剪失败）
-    int virtualX = 0, virtualY = 0, virtualW = 0, virtualH = 0;
+    int virtualW = 0, virtualH = 0;
     for (const QRect &rect : screenRects)
     {
         virtualW = qMax(virtualW, rect.right());

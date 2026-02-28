@@ -6,6 +6,7 @@
 #include <QThread>
 #include <QImageWriter>
 #include <QUrlQuery>
+#include <QtConcurrent>
 
 #include "commontool/imagetool.h"
 #include "commontool/globaltool.h"
@@ -13,6 +14,8 @@
 #include "commontool/screenshooter.h"
 #include "commontool/globaldef.h"
 #include "def.h"
+#include "unify/TraceObject.h"
+#include "tool.h"
 
 ScreenServer::ScreenServer(QObject *parent): QObject(parent)
 {
@@ -26,6 +29,9 @@ ScreenServer::ScreenServer(QObject *parent): QObject(parent)
     m_screenshotProcess = new QProcess(this);
     connect(m_screenshotProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             &ScreenServer::onProcessFinished);
+
+    // ========== 新增：初始化UDP帧服务 ==========
+    UdpFrameServer::getInstance(this)->init(8889);  // 初始化UDP服务，端口8889
 }
 
 ScreenServer::~ScreenServer()
@@ -36,6 +42,8 @@ ScreenServer::~ScreenServer()
         m_screenshotProcess->kill();
         m_screenshotProcess->deleteLater();
     }
+    // ========== 新增：停止UDP服务 ==========
+    UdpFrameServer::getInstance()->stop();
 }
 
 bool ScreenServer::startListen(const QString &serverIp, quint16 serverPort)
@@ -119,13 +127,18 @@ void ScreenServer::onNewConnection()
     qDebug() << "前端WS连接成功，解析到屏幕索引：" << screenIdx;
     qDebug() << "屏幕个数: " << ScreenShooter::instance()->screenCount();
 
-//    // 索引合法性校验：越界则返回主屏
-//    if ((screenIdx < 0 && screenIdx != -1) || screenIdx >= ScreenShooter::instance()->screenCount())
-//    {
-//        screenIdx = DEFAULT_SCREEN_IDX;
-//    }
+    //    // 索引合法性校验：越界则返回主屏
+    //    if ((screenIdx < 0 && screenIdx != -1) || screenIdx >= ScreenShooter::instance()->screenCount())
+    //    {
+    //        screenIdx = DEFAULT_SCREEN_IDX;
+    //    }
     info.screenIndex = screenIdx;
-//    qDebug() << "实际屏幕索引：" << screenIdx;
+    //    qDebug() << "实际屏幕索引：" << screenIdx;
+
+    // ========== 初始化UDP信息（替代原有map插入） ==========
+    info.udpClientIp   = client->peerAddress();  // 默认使用WebSocket客户端IP
+    info.udpClientPort = 8890;                   // 默认UDP端口8890
+    info.userAgent     = client->request().rawHeader("User-Agent");
 
     m_clientMap.insert(client, info);
     // 连接客户端信号
@@ -238,74 +251,95 @@ void ScreenServer::captureScreenAndPush()
     // 5. 为每个客户端推送差分数据
     for (auto client : m_clientMap.keys())
     {
-        ClientInfo &info = m_clientMap[client];  // 单个客户端的专属状态
-        QRect       diffRect;
-        QPixmap     currPixmap;
-        int         screenIndex = info.screenIndex;
-        if (screenIndex < 0)
         {
-            if (screenIndex == -1)
+            ClientInfo &info = m_clientMap[client];  // 单个客户端的专属状态
+//            TRACEOBJECT("ScreenServer::captureScreenAndPush " + info.udpClientIp.toString().toStdString())
+            QRect   diffRect;
+            QPixmap currPixmap;
+            int     screenIndex = info.screenIndex;
+            if (screenIndex < 0)
             {
-                // TODO: 全屏幕
-                screenIndex = 0;
+                if (screenIndex == -1)
+                {
+                    // TODO: 全屏幕
+                    screenIndex = 0;
+                }
+            }
+            else if (screenIndex >= currPixmaps.size())
+            {
+                return;
+            }
+            currPixmap             = currPixmaps[screenIndex];
+            int globalScreenWidth  = currPixmap.width();
+            int globalScreenHeight = currPixmap.height();
+
+            // 2.1 该客户端的差分区域计算（独立判断首帧）
+            if (info.isFirstFrame || info.prevPixmap.isNull() || info.prevPixmap.size() != currPixmap.size())
+            {
+                // 该客户端首帧/分辨率变化：发送全屏
+                diffRect          = QRect(0, 0, globalScreenWidth, globalScreenHeight);
+                info.isFirstFrame = false;
+                info.prevPixmap   = currPixmap.copy();  // 初始化该客户端的上一帧
+            }
+            else
+            {
+                // 对比该客户端的上一帧和当前帧
+                diffRect = calculateDiffRect(info.prevPixmap, currPixmap, info.diffThreshold);
+                if (diffRect.isEmpty())
+                {
+                    return;  // 该客户端无变化，跳过推送
+                }
+                info.prevPixmap = currPixmap.copy();  // 更新该客户端的上一帧
+            }
+
+            // 2.2 裁剪该客户端的差分区域
+            QPixmap clientPixmap = currPixmap.copy(diffRect);
+
+            // 2.3 更新帧率
+            int targetFps = calculateTargetFps(diffRect, QSize(globalScreenWidth, globalScreenHeight), info);
+            m_captureTimer->setInterval(1000 / targetFps);
+//            qInfo() << "current fps:" << targetFps;
+
+            // 2.4 构造该客户端的差分帧信息
+            QJsonObject frameInfo;
+            frameInfo["type"]    = "screen_frame_meta";
+            frameInfo["width"]   = globalScreenWidth;
+            frameInfo["height"]  = globalScreenHeight;
+            frameInfo["diff_x"]  = diffRect.x();
+            frameInfo["diff_y"]  = diffRect.y();
+            frameInfo["diff_w"]  = diffRect.width();
+            frameInfo["diff_h"]  = diffRect.height();
+            frameInfo["is_full"] = (diffRect.width() == globalScreenWidth && diffRect.height() == globalScreenHeight); // 是否全屏
+            frameInfo["fps"] = targetFps;
+
+            // 2.5 发送该客户端的元信息和二进制数据
+            QJsonDocument infoDoc(frameInfo);
+            sendMessageToClient(client, infoDoc.toJson(QJsonDocument::Compact));
+
+            QImage diffImage = clientPixmap.toImage();
+            // 2.6 应用特效
+            int x, y;
+            getRealXY(info, x, y);
+            applySpecialEffects(diffImage, info.specialEffect, QPoint(x, y));
+            QByteArray hdData = encodeHdImage(diffImage, info.hdLevel);
+
+            QString ua = info.userAgent;
+            bool    isBrowser =
+                ua.contains("Mozilla") || ua.contains("Chrome") || ua.contains("Edge") || ua.contains("Safari");
+            if (isBrowser)  // 使用websocket发送
+            {
+                sendBinaryToClient(client, hdData);
+            }
+            else
+            {
+                bool isFullFrame = (diffRect.width() == globalScreenWidth && diffRect.height() == globalScreenHeight);
+                QHostAddress clientIp   = info.udpClientIp;
+                quint16      clientPort = info.udpClientPort;
+
+                // 调用封装的UDP服务发送帧
+                UdpFrameServer::getInstance()->sendFrame(hdData, diffRect, isFullFrame, clientIp, clientPort);
             }
         }
-        else if (screenIndex >= currPixmaps.size())
-        {
-            continue;
-        }
-        currPixmap             = currPixmaps[screenIndex];
-        int globalScreenWidth  = currPixmap.width();
-        int globalScreenHeight = currPixmap.height();
-
-        // 2.1 该客户端的差分区域计算（独立判断首帧）
-        if (info.isFirstFrame || info.prevPixmap.isNull() || info.prevPixmap.size() != currPixmap.size())
-        {
-            // 该客户端首帧/分辨率变化：发送全屏
-            diffRect          = QRect(0, 0, globalScreenWidth, globalScreenHeight);
-            info.isFirstFrame = false;
-            info.prevPixmap   = currPixmap.copy();  // 初始化该客户端的上一帧
-        }
-        else
-        {
-            // 对比该客户端的上一帧和当前帧
-            diffRect = calculateDiffRect(info.prevPixmap, currPixmap, info.diffThreshold);
-            if (diffRect.isEmpty())
-            {
-                continue;  // 该客户端无变化，跳过推送
-            }
-            info.prevPixmap = currPixmap.copy();  // 更新该客户端的上一帧
-        }
-
-        // 2.2 裁剪该客户端的差分区域
-        QPixmap diffPixmap = currPixmap.copy(diffRect);
-
-        // 2.3 绘制该客户端的专属鼠标
-        QPixmap clientPixmap = diffPixmap.copy();
-        if (diffRect.contains(info.mouseX, info.mouseY))
-        {
-            // 差分传输 鼠标会有残影
-            //            drawVirtualMouse(info, globalScreenWidth, globalScreenHeight, clientPixmap);
-        }
-
-        // 2.4 构造该客户端的差分帧信息
-        QJsonObject frameInfo;
-        frameInfo["type"]    = "screen_frame_meta";
-        frameInfo["width"]   = globalScreenWidth;
-        frameInfo["height"]  = globalScreenHeight;
-        frameInfo["diff_x"]  = diffRect.x();
-        frameInfo["diff_y"]  = diffRect.y();
-        frameInfo["diff_w"]  = diffRect.width();
-        frameInfo["diff_h"]  = diffRect.height();
-        frameInfo["is_full"] = (diffRect.width() == globalScreenWidth && diffRect.height() == globalScreenHeight);
-
-        // 2.5 发送该客户端的元信息和二进制数据
-        QJsonDocument infoDoc(frameInfo);
-        sendMessageToClient(client, infoDoc.toJson(QJsonDocument::Compact));
-
-        QImage     diffImage = clientPixmap.toImage();
-        QByteArray hdData    = encodeHdImage(diffImage, info.hdLevel);
-        sendBinaryToClient(client, hdData);
     }
 }
 
@@ -331,13 +365,13 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
         int x, y;
         getRealXY(info, x, y);
         MouseSimulator::getInstance()->moveMouse(info.screenIndex, x, y);
-        QString logStr = QString("Client %1 mouse move to: %2,%3 wh=%4x%5")
-                             .arg(client->peerAddress().toString())  // %1: 客户端地址
-                             .arg(info.mouseX)                       // %2: 鼠标X坐标
-                             .arg(info.mouseY)                       // %3: 鼠标Y坐标
-                             .arg(info.screenWidth)                  // %4: 屏幕宽度
-                             .arg(info.screenHeight);                // %5: 屏幕高度
-        LOG_MESSAGE("Asrv", logStr)
+        //        QString logStr = QString("Client %1 mouse move to: %2,%3 wh=%4x%5")
+        //                             .arg(client->peerAddress().toString())  // %1: 客户端地址
+        //                             .arg(info.mouseX)                       // %2: 鼠标X坐标
+        //                             .arg(info.mouseY)                       // %3: 鼠标Y坐标
+        //                             .arg(info.screenWidth)                  // %4: 屏幕宽度
+        //                             .arg(info.screenHeight);                // %5: 屏幕高度
+        //        LOG_MESSAGE("Asrv", logStr)
     }
     // 处理鼠标点击
     else if (type == "mouse_click")
@@ -402,13 +436,13 @@ void ScreenServer::handleMouseEvent(const QJsonObject &mouseEvent, QWebSocket *c
         // 模拟Linux系统滚轮
         MouseSimulator::WheelDirection eDirection = getScrollWhellDirection(direction);
         MouseSimulator::getInstance()->scrollWheel(eDirection, steps);
-        QString logStr = QString("Client %1 mouse wheel: %2 steps: %3 at %4,%5")
-                             .arg(client->peerAddress().toString())  // %1: 客户端地址
-                             .arg(direction)                         // %2: 滚轮方向
-                             .arg(steps)                             // %3: 滚动步数
-                             .arg(x)                                 // %4: X坐标
-                             .arg(y);                                // %5: Y坐标
-        LOG_MESSAGE("Asrv", logStr)
+        //        QString logStr = QString("Client %1 mouse wheel: %2 steps: %3 at %4,%5")
+        //                             .arg(client->peerAddress().toString())  // %1: 客户端地址
+        //                             .arg(direction)                         // %2: 滚轮方向
+        //                             .arg(steps)                             // %3: 滚动步数
+        //                             .arg(x)                                 // %4: X坐标
+        //                             .arg(y);                                // %5: Y坐标
+        //        LOG_MESSAGE("Asrv", logStr)
     }
 }
 
@@ -447,6 +481,15 @@ void ScreenServer::handleKeyboardEvent(const QJsonObject &keyboardEvent, QWebSoc
     // 转换为std::string方便处理
     std::string keyName = keyStr.toStdString();
 
+    // 特殊处理: Win / Alt+Tab
+    {
+        if (keyName == "meta")
+        {
+            KeySym targetKey = getKeySymFromName(keyName, info.isShiftPressed);
+            simulateKeyWithMask({}, targetKey);
+            return;
+        }
+    }
     // 跳过纯组合键的press/release（单独处理组合键状态即可）
     if (keyName == "ctrl" || keyName == "shift" || keyName == "alt" || keyName == "meta")
     {
@@ -511,6 +554,8 @@ void ScreenServer::handleSettingEvent(const QJsonObject &event, QWebSocket *clie
 
     ClientInfo &info = m_clientMap[client];
     QString     type = event["type"].toString();
+    QJsonObject response;
+    response["type"] = "setting_ack";
     if (type.contains("screen_quality"))
     {
         // 2. 解析前端发送的画质参数
@@ -521,15 +566,35 @@ void ScreenServer::handleSettingEvent(const QJsonObject &event, QWebSocket *clie
         info.prevPixmap     = QPixmap();
         qInfo() << "Client" << client << "quality switch to:" << qualityType;
 
-        QJsonObject response;
-        response["type"]    = "setting_ack";
         response["status"]  = "success";
         response["quality"] = qualityType;
         response["message"] = QString("画质已切换为：%1").arg(qualityType);
-
-        // 发送确认消息
-        client->sendTextMessage(QJsonDocument(response).toJson(QJsonDocument::Compact));
     }
+    else if (type.contains("screen_effect"))
+    {
+        int effect         = event["effect"].toInt();
+        info.specialEffect = effect;
+        info.isFirstFrame  = true;
+        info.prevPixmap    = QPixmap();
+        qInfo() << "Client" << client << "effect switch to:" << effect;
+
+        response["status"]  = "success";
+        response["effect"]  = effect;
+        response["message"] = QString("特效已切换为：%1").arg(effect);
+    }
+    else if (type.contains("fullscreen"))
+    {
+        bool bFullScreen  = event["is_fullscreen"].toBool();
+        info.isFirstFrame = true;
+        info.prevPixmap   = QPixmap();
+        qInfo() << "Client" << client << "full screen:" << bFullScreen;
+
+        response["status"]  = "success";
+        response["message"] = QString("全屏模式: ").arg(bFullScreen);
+    }
+
+    // 发送确认消息
+    client->sendTextMessage(QJsonDocument(response).toJson(QJsonDocument::Compact));
 }
 
 void ScreenServer::getRealXY(const ClientInfo &info, int &x, int &y)
@@ -606,92 +671,4 @@ void ScreenServer::drawVirtualMouse(const ClientInfo &info,
     painter.setBrush(Qt::transparent);
     painter.setPen(QPen(Qt::white, 1));
     painter.drawPath(mousePath);
-}
-
-QRect ScreenServer::calculateDiffRect(const QPixmap &prev, const QPixmap &curr, int threshold)
-{
-    QImage prevImg = prev.toImage().convertToFormat(QImage::Format_RGB888);
-    QImage currImg = curr.toImage().convertToFormat(QImage::Format_RGB888);
-
-    int  width  = prevImg.width();
-    int  height = prevImg.height();
-    int  minX = width, minY = height, maxX = 0, maxY = 0;
-    bool hasDiff = false;
-
-    // 逐像素对比（可优化：按块对比提升性能）
-    for (int y = 0; y < height; y++)
-    {
-        uchar *prevLine = prevImg.scanLine(y);
-        uchar *currLine = currImg.scanLine(y);
-        for (int x = 0; x < width; x++)
-        {
-            // 计算RGB差值
-            int rDiff     = abs(prevLine[x * 3] - currLine[x * 3]);
-            int gDiff     = abs(prevLine[x * 3 + 1] - currLine[x * 3 + 1]);
-            int bDiff     = abs(prevLine[x * 3 + 2] - currLine[x * 3 + 2]);
-            int totalDiff = rDiff + gDiff + bDiff;
-
-            if (totalDiff > threshold)
-            {
-                // 更新差分区域边界
-                minX    = qMin(minX, x);
-                minY    = qMin(minY, y);
-                maxX    = qMax(maxX, x);
-                maxY    = qMax(maxY, y);
-                hasDiff = true;
-            }
-        }
-    }
-
-    if (!hasDiff)
-    {
-        return QRect();  // 无变化
-    }
-
-    // 扩展差分区域（避免边缘截断，可选）
-    minX = qMax(0, minX - 2);
-    minY = qMax(0, minY - 2);
-    maxX = qMin(width - 1, maxX + 2);
-    maxY = qMin(height - 1, maxY + 2);
-
-    return QRect(minX, minY, maxX - minX + 1, maxY - minY + 1);
-}
-
-QByteArray ScreenServer::encodeHdImage(const QImage &image, HdLevel level)
-{
-    QByteArray data;
-    QBuffer    buffer(&data);
-    if (!buffer.open(QIODevice::WriteOnly))
-    {  // 增加异常处理，提升健壮性
-        return QByteArray();
-    }
-
-    QImageWriter writer;        // 先默认构造
-    writer.setDevice(&buffer);  // 单独设置设备
-
-    // 根据高清级别配置格式和参数
-    switch (level)
-    {
-        case HdLevel_JpegHigh:
-            writer.setFormat("JPEG");
-            writer.setQuality(80);
-            break;
-        case HdLevel_JpegLossless:
-            writer.setFormat("JPEG");
-            writer.setQuality(100);  // 最高质量
-            // 禁用色度子采样（解决JPEG模糊的核心参数）
-            writer.setText("chroma_subsampling", "4:4:4");
-            break;
-        case HdLevel_PngLossless:
-            writer.setFormat("PNG");
-            writer.setCompression(2);  // 轻度压缩，速度更快，画质无损
-            break;
-    }
-
-    // 开启写入优化，提升高清图片编码效率
-    writer.setOptimizedWrite(true);
-    writer.write(image);
-
-    buffer.close();  // 显式关闭缓冲区，确保数据完整
-    return data;
 }

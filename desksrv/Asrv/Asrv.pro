@@ -1,4 +1,4 @@
-greaterThan(QT_MAJOR_VERSION, 4): QT += core network websockets gui widgets
+greaterThan(QT_MAJOR_VERSION, 4): QT += core network websockets gui widgets concurrent
 
 include($$PWD/../mainconfig.pri)
 
@@ -28,7 +28,8 @@ SOURCES += main.cpp \
     widget/NotifyPopup.cpp \
     ScreenServer.cpp \
     x11tool.cpp \
-    ClientInfo.cpp
+    ClientInfo.cpp \
+    UdpFrameServer.cpp
 
 HEADERS += \
     tool.h \
@@ -40,7 +41,8 @@ HEADERS += \
     widget/NotifyPopup.h \
     ScreenServer.h \
     x11tool.h \
-    ClientInfo.h
+    ClientInfo.h \
+    UdpFrameServer.h
 
 LIBS += -lutil
 

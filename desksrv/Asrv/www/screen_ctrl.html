@@ -17,7 +17,8 @@
     <div class="sidebar" id="sidebar">
         <button class="sidebar-toggle" id="sidebarToggle">☰</button>
         <div class="sidebar-menu-item">资源</div>
-        <div class="sidebar-menu-item">设置</div>
+        <div class="sidebar-menu-item" id="fullscreenToggle">全屏</div>
+        <div class="sidebar-menu-item" id="settingsMenu">设置</div>
     </div>
 
     <!-- 比例调节控件 -->
@@ -112,6 +113,24 @@
                         <option value="png_lossless" selected>PNG无损（最高清）</option>
                     </select>
                 </div>
+                <!-- ========== 新增 特效开关选项 开始 ========== -->
+                <div class="settings-item mt20">
+                    <label>画面特效 (点击切换选中/取消)</label>
+                    <div class="effect-list">
+                        <div class="effect-item" data-effect="1">灰度化</div>
+                        <div class="effect-item" data-effect="2">画质压缩</div>
+                        <div class="effect-item" data-effect="4">锐化增强</div>
+                        <div class="effect-item" data-effect="8">高斯模糊</div>
+                        <div class="effect-item" data-effect="16">颜色反相</div>
+                        <div class="effect-item" data-effect="32">亮度调节</div>
+                        <div class="effect-item" data-effect="64">对比度增强</div>
+                        <div class="effect-item" data-effect="128">鼠标光标高亮</div>
+                        <div class="effect-item" data-effect="256">降噪滤波</div>
+                        <div class="effect-item" data-effect="512">水平镜像</div>
+                        <div class="effect-item" data-effect="1024">垂直镜像</div>
+                    </div>
+                </div>
+                <!-- ========== 新增 特效开关选项 结束 ========== -->
                 <button id="saveSettingsBtn">保存设置</button>
             </div>
         </div>

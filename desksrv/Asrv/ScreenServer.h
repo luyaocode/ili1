@@ -17,6 +17,7 @@
 
 #include "commontool/mousesimulator.h"
 #include "ClientInfo.h"
+#include "UdpFrameServer.h"
 
 class ScreenServer : public QObject
 {
@@ -53,12 +54,9 @@ private:
     QMap<QWebSocket *, ClientInfo> m_clientMap;                    // 客户端映射
     QProcess                      *m_screenshotProcess = nullptr;  // 截屏进程
 private:
-    void                           getRealXY(const ClientInfo &info, int &x, int &y);
+    void                           getRealXY(const ClientInfo &info, int &x, int &y); // info的坐标转换为客户端真实坐标
     MouseSimulator::WheelDirection getScrollWhellDirection(const QString &direction);
     void  drawVirtualMouse(const ClientInfo &info, const int screenWidth, const int screenHeight, QPixmap &pixmap);
-    QRect calculateDiffRect(const QPixmap &prev, const QPixmap &curr, int threshold);
-    // 高清图片编码函数
-    QByteArray encodeHdImage(const QImage &image, HdLevel level);
 };
 
 #endif  // SCREENSERVER_H

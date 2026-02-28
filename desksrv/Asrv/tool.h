@@ -5,6 +5,7 @@
 #include <QMap>
 
 #include "def.h"
+#include "ClientInfo.h"
 
 class QTcpSocket;
 class QProcess;
@@ -56,5 +57,8 @@ void setTermAttrAsync(struct termios& termAttr);
 
 // 路径转换
 QString formatPath(const QString& path);
+
+// 根据差分区域计算目标帧率
+int calculateTargetFps(const QRect &diffRect, const QSize &screenSize, ClientInfo &info);
 
 #endif  // TOOL_H

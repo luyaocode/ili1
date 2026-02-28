@@ -1,17 +1,15 @@
 #-------------------------------------------------
 #
-# Project created by QtCreator 2025-10-24T11:16:09
+# Project created by QtCreator 2026-01-13T09:27:17
 #
 #-------------------------------------------------
 
-QT       += widgets testlib
+QT       += core gui dbus bluetooth widgets charts
+QT  -=console
 
-TARGET = tst_uinttest
-CONFIG   += console
-CONFIG   -= app_bundle
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-include($$PWD/../mainconfig.pri)
-
+TARGET = BluetoothSwitch
 TEMPLATE = app
 
 # The following define makes your compiler emit warnings if you use
@@ -25,21 +23,21 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
-INCLUDEPATH += $$PWD/../commontool
+INCLUDEPATH +=$$PWD/../../lib/common $$PWD/../../include/unify
 
 SOURCES += \
-        tst_uinttest.cpp \ 
-    ProcessMgrTest.cpp \
-    DoubleFreeTest.cpp
-
-DEFINES += SRCDIR=\\\"$$PWD/\\\"
+        main.cpp \
+        MainWindow.cpp \
+        $$PWD/../../include/unify/MainThreadBlockDetector.cpp \
+    BluetoothScanWorker.cpp \
+    ChartDialog.cpp
 
 HEADERS += \
-    calc_interface.h \
-    MyWidget.h \
-    ClassN.h \
-    ProcessMgrTest.h \
-    DoubleFreeTest.h
+        MainWindow.h \
+        $$PWD/../../include/unify/MainThreadBlockDetector.h \
+    BluetoothScanWorker.h \
+    ChartDialog.h
 
-LIBS +=-ldl
-LIBS +=-L$$PWD/../commontool -lcommontool
+FORMS += \
+        MainWindow.ui
+LIBS += -lQt5Charts

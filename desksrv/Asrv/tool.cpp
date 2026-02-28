@@ -603,3 +603,36 @@ QString formatPath(const QString &path)
     expandTilde(param);
     return param;
 }
+
+int calculateTargetFps(const QRect &diffRect, const QSize &screenSize, ClientInfo &info)
+{
+    if (diffRect.isEmpty())
+    {
+        return 0;  // 无差分，不发送
+    }
+
+    // 1. 计算差分区域占屏比（面积比）
+    qreal screenArea   = screenSize.width() * screenSize.height();
+    qreal diffArea     = diffRect.width() * diffRect.height();
+    info.diffAreaRatio = diffArea / screenArea;  // 保存到客户端信息
+
+    // 2. 根据占比动态调整帧率（可自定义阈值）
+    int targetFps;
+    if (info.diffAreaRatio >= 0.8)
+    {  // 大区域（≥80%）
+        targetFps = info.maxFps;
+    }
+    else if (info.diffAreaRatio >= 0.2)
+    {  // 中等区域（20%~80%）
+        // 线性插值：20%→20帧，80%→30帧
+        targetFps = 20 + (info.diffAreaRatio - 0.2) / 0.6 * 10;
+    }
+    else
+    {                             // 小区域（≤20%）
+        targetFps = info.minFps;  // 最低15帧
+    }
+
+    // 3. 限制帧率范围（避免超出最小/最大值）
+    targetFps = qBound(info.minFps, targetFps, info.maxFps);
+    return targetFps;
+}

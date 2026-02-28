@@ -21,7 +21,14 @@ const settingsModal = document.getElementById('settingsModal');
 const qualitySelect = document.getElementById('qualitySelect');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const settingsCloseBtn = document.querySelector('.settings-close');
-const settingsMenuItem = document.querySelector('.sidebar-menu-item:nth-child(3)'); // 匹配"设置"菜单项
+const settingsMenuItem = document.getElementById('settingsMenu');
+const fullscreenBtn = document.getElementById('fullscreenToggle');
+
+// 特效核心变量：存储当前所有选中特效的int值
+let currentEffectInt = 0;
+// 特效缓存key & 画质缓存key
+const EFFECT_CACHE_KEY = "remote_screen_effect_status";
+const QUALITY_CACHE_KEY = "remote_screen_img_quality";
 
 // 键盘状态跟踪：记录组合键是否按下
 const keyState = {
@@ -31,6 +38,157 @@ const keyState = {
     meta: false, // Windows键/Command键
     pressedKeys: new Set() // 记录当前按下的普通按键
 };
+
+// 全局变量 - 新增全屏状态标记
+let isFullscreen = false;
+const screenContainer = document.querySelector('.screen-container');
+
+function initFullscreenToggle() {
+    const fullscreenBtn = document.getElementById('fullscreenToggle');
+    const canvas = document.getElementById('screenCanvas');
+    const screenContainer = document.querySelector('.screen-container');
+
+    // 封装原生全屏切换方法（等效F11）
+    function toggleBrowserFullscreen() {
+        // 退出全屏
+        if (document.fullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { // 兼容webkit内核（Chrome/Safari）
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { // 兼容IE/Edge
+                document.msExitFullscreen();
+            }
+            isFullscreen = false;
+            fullscreenBtn.textContent = '全屏';
+            // 恢复样式和Canvas尺寸
+            document.body.classList.remove('fullscreen-mode');
+            screenContainer.classList.remove('screen-container-fullscreen');
+            canvas.classList.remove('canvas-fullscreen');
+            canvas.width = screenWidth || 1920;
+            canvas.height = screenHeight || 1080;
+            sendFullscreenStateToServer(false);
+        }
+        // 进入全屏（以screenContainer为目标，等效F11）
+        else {
+            const target = screenContainer;
+            if (target.requestFullscreen) {
+                target.requestFullscreen();
+            } else if (target.webkitRequestFullscreen) { // 兼容webkit
+                target.webkitRequestFullscreen();
+            } else if (target.msRequestFullscreen) { // 兼容IE/Edge
+                target.msRequestFullscreen();
+            }
+            isFullscreen = true;
+            fullscreenBtn.textContent = '退出全屏';
+            // 添加全屏样式
+            document.body.classList.add('fullscreen-mode');
+            screenContainer.classList.add('screen-container-fullscreen');
+            canvas.classList.add('canvas-fullscreen');
+            // 适配全屏尺寸
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            sendFullscreenStateToServer(true);
+        }
+    }
+
+    // 绑定按钮点击事件
+    fullscreenBtn.addEventListener('click', toggleBrowserFullscreen);
+
+    // 监听原生全屏状态变化（处理用户按F11/ESC退出的情况）
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+            // 用户手动退出全屏，同步状态
+            isFullscreen = false;
+            fullscreenBtn.textContent = '全屏';
+            document.body.classList.remove('fullscreen-mode');
+            screenContainer.classList.remove('screen-container-fullscreen');
+            canvas.classList.remove('canvas-fullscreen');
+            canvas.width = screenWidth || 1920;
+            canvas.height = screenHeight || 1080;
+            sendFullscreenStateToServer(false);
+        }
+    });
+
+    // 兼容webkit内核的全屏变化事件
+    document.addEventListener('webkitfullscreenchange', () => {
+        if (!document.webkitFullscreenElement) {
+            isFullscreen = false;
+            fullscreenBtn.textContent = '全屏';
+            document.body.classList.remove('fullscreen-mode');
+            screenContainer.classList.remove('screen-container-fullscreen');
+            canvas.classList.remove('canvas-fullscreen');
+            canvas.width = screenWidth || 1920;
+            canvas.height = screenHeight || 1080;
+            sendFullscreenStateToServer(false);
+        }
+    });
+
+    // 监听窗口大小变化，适配全屏尺寸
+    window.addEventListener('resize', () => {
+        if (isFullscreen && document.fullscreenElement) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        sendFullscreenStateToServer(isFullscreen);
+    });
+}
+
+function sendFullscreenStateToServer(state) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'fullscreen',
+            is_fullscreen: state
+        }));
+    }
+}
+
+// ========== 【核心新增】初始化画面特效 ==========
+function initScreenEffect(){
+    const effectItems = document.querySelectorAll('.effect-item');
+    // 1. 读取浏览器缓存中的特效状态，没有则为0
+    const cacheEffect = localStorage.getItem(EFFECT_CACHE_KEY);
+    if(cacheEffect && !isNaN(cacheEffect)){
+        currentEffectInt = parseInt(cacheEffect);
+    }
+    // 2. 根据缓存的int值，渲染页面上的特效选中状态
+    effectItems.forEach(item => {
+        const effectBit = parseInt(item.dataset.effect);
+        if(currentEffectInt & effectBit){
+            item.classList.add('active');
+        }
+    });
+    // 3. 绑定特效项点击事件：切换选中/取消 + 计算int值 + 存缓存 + 实时发送
+    effectItems.forEach(item => {
+        item.addEventListener('click', function(){
+            const effectBit = parseInt(this.dataset.effect);
+            // 切换选中状态
+            if(this.classList.contains('active')){
+                this.classList.remove('active');
+                currentEffectInt = currentEffectInt & (~effectBit); // 取消：对应位清零
+            }else{
+                this.classList.add('active');
+                currentEffectInt = currentEffectInt | effectBit;    // 选中：对应位赋值1
+            }
+            // 保存最新状态到浏览器缓存(localStorage)
+            localStorage.setItem(EFFECT_CACHE_KEY, currentEffectInt);
+            // ========== 实时发送：切换即发送当前所有特效的int值 ==========
+            sendEffectIntToServer();
+        });
+    });
+}
+
+// ========== 【核心新增】发送特效int值到服务端 ==========
+function sendEffectIntToServer(){
+    if(ws && ws.readyState === WebSocket.OPEN){
+        // 发送格式：json对象，方便服务端解析，固定字段effect
+        ws.send(JSON.stringify({
+            type: "screen_effect",
+            effect: currentEffectInt
+        }));
+        console.log("发送特效状态int值：", currentEffectInt);
+    }
+}
 
 // 初始化WebSocket连接
 function initWebSocket() {
@@ -54,6 +212,8 @@ function initWebSocket() {
         console.log('WebSocket connected');
         statusEl.className = 'status online';
         statusEl.textContent = '已连接';
+        sendQualityToServer();
+        sendEffectIntToServer();
     };
 
     // 接收消息
@@ -78,7 +238,8 @@ function initWebSocket() {
                         diff_y: data.diff_y || 0,
                         diff_w: data.diff_w || (data.width || 1920),
                         diff_h: data.diff_h || (data.height || 1080),
-                        is_full: data.is_full || false
+                        is_full: data.is_full || false,
+                        fps: data.fps || 0
                     };
                 } else {
                     // 其他type的消息直接打印（增强日志可读性）
@@ -156,6 +317,7 @@ function renderJpegFrame(blob, meta) {
             // 在指定位置绘制差分图像（不重置整个Canvas）
             ctx.drawImage(img, diffX, diffY, diffW, diffH);
         }
+        statusEl.textContent = "fps: "+meta.fps;
     };
 
     img.onerror = (err) => {
@@ -170,6 +332,12 @@ function renderJpegFrame(blob, meta) {
 
 // ========== 新增：设置弹窗事件 ==========
 function initSettingsModal() {
+    const cacheQuality = localStorage.getItem(QUALITY_CACHE_KEY);
+    if(cacheQuality)
+    {
+        currentQuality = cacheQuality;
+        qualitySelect.value = cacheQuality;
+    }
     // 点击设置菜单打开弹窗
     settingsMenuItem.addEventListener('click', () => {
         settingsModal.style.display = 'block';
@@ -190,32 +358,34 @@ function initSettingsModal() {
 
     // 保存设置并发送给后端
     saveSettingsBtn.addEventListener('click', () => {
-        const selectedQuality = qualitySelect.value;
-        currentQuality = selectedQuality;
-
-        // 构造画质设置消息
-        const qualityMsg = {
-            type: 'screen_quality',
-            quality: selectedQuality,
-            // 可选：传递对应参数（供后端解析）
-            params: {
-                jpeg_high: { format: 'JPEG', quality: 95 },
-                jpeg_lossless: { format: 'JPEG', quality: 100, chroma_subsampling: '4:4:4' },
-                png_lossless: { format: 'PNG', compression: 2 }
-            }[selectedQuality]
-        };
-
-        // 通过WebSocket发送给后端
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(qualityMsg));
-            console.log('发送画质设置:', qualityMsg);
-        } else {
-            alert('未连接到服务器，无法保存设置');
-        }
-
+        currentQuality = qualitySelect.value;
+        localStorage.setItem(QUALITY_CACHE_KEY, currentQuality);
+        sendQualityToServer();
         // 关闭弹窗
         settingsModal.style.display = 'none';
     });
+}
+
+function sendQualityToServer(){
+    // 构造画质设置消息
+    const qualityMsg = {
+        type: 'screen_quality',
+        quality: currentQuality,
+        // 可选：传递对应参数（供后端解析）
+        params: {
+            jpeg_high: { format: 'JPEG', quality: 95 },
+            jpeg_lossless: { format: 'JPEG', quality: 100, chroma_subsampling: '4:4:4' },
+            png_lossless: { format: 'PNG', compression: 2 }
+        }[currentQuality]
+    };
+
+    // 通过WebSocket发送给后端
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(qualityMsg));
+        console.log('发送画质设置:', qualityMsg);
+    } else {
+        alert('未连接到服务器，无法保存设置');
+    }
 }
 
 
@@ -685,11 +855,14 @@ function initKeyboardEvents() {
 
 // 页面加载完成初始化
 window.onload = () => {
-    initWebSocket();
-    initMouseEvents();
+    initSettingsModal(); // 初始化设置弹窗
+    initScreenEffect();     // 初始化特效：读取缓存 + 渲染选中状态
+    initWebSocket(); // websocket
+    initMouseEvents(); // 鼠标监听
     initKeyboardEvents(); // 初始化键盘监听
     initKeyButtonEvents(); // 初始化快捷键
-    initSettingsModal(); // 初始化设置弹窗
+    // 新增：初始化全屏切换逻辑
+    initFullscreenToggle();
 };
 
 // 页面关闭时清理连接
@@ -701,4 +874,11 @@ window.onbeforeunload = () => {
     resetKeyState();
     // 清理所有未释放的Blob URL
     URL.revokeObjectURL = URL.revokeObjectURL || function() {};
+
+    // 恢复全屏状态
+    if (isFullscreen) {
+       document.body.classList.remove('fullscreen-mode');
+       screenContainer.classList.remove('screen-container-fullscreen');
+       canvas.classList.remove('canvas-fullscreen');
+    }
 };

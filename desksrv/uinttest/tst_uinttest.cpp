@@ -13,6 +13,8 @@
 #include "MyWidget.h"
 #include "ClassN.h"
 #include "commontool/mousesimulator.h"
+#include "ProcessMgrTest.h"
+#include "DoubleFreeTest.h"
 
 USING_NAMESAPCE(unify)
 
@@ -29,8 +31,12 @@ private:
     void test_dynamic_library();
     void test_SignalDebugger();
     void test_TryLock();
-private Q_SLOTS:
     void test_mouseSimulator();
+    void test_processManager();
+    void test_QTimer();
+    void test_QTimer2();
+private Q_SLOTS:
+    void test_DoubleFree();
 };
 
 UintTest::UintTest()
@@ -443,16 +449,18 @@ void UintTest::test_TryLock()
 }
 
 // 鼠标画圆形轨迹（以屏幕中心(960,540)为圆心）
-void drawMouseCircle(MouseSimulator * mouseSim) {
+void drawMouseCircle(MouseSimulator *mouseSim)
+{
     // 配置参数
-    const int centerX = 960;    // 圆心X坐标（屏幕中心）
-    const int centerY = 540;    // 圆心Y坐标（屏幕中心）
-    const int radius = 200;     // 圆的半径（可根据需要调整）
-    const int steps = 1000;      // 绘制圆的步数（步数越多，圆越平滑）
-    const int delayMs = 10;     // 每步移动的延时（毫秒，越小速度越快）
+    const int centerX = 960;   // 圆心X坐标（屏幕中心）
+    const int centerY = 540;   // 圆心Y坐标（屏幕中心）
+    const int radius  = 200;   // 圆的半径（可根据需要调整）
+    const int steps   = 1000;  // 绘制圆的步数（步数越多，圆越平滑）
+    const int delayMs = 10;    // 每步移动的延时（毫秒，越小速度越快）
 
     // 遍历0~360度，计算每个点的坐标并移动鼠标
-    for (int i = 0; i <= steps; ++i) {
+    for (int i = 0; i <= steps; ++i)
+    {
         // 将角度转换为弧度（三角函数需要弧度值）
         double angle = 2 * M_PI * i / steps;
 
@@ -486,38 +494,151 @@ void UintTest::test_mouseSimulator()
     }
 
     // 2. 移动鼠标到屏幕中心（假设屏幕分辨率1920x1080）
-//    mouseSim->moveMouse(960, 540);
-//    QThread::sleep(1);  // 等待1秒，便于观察
+    //    mouseSim->moveMouse(960, 540);
+    //    QThread::sleep(1);  // 等待1秒，便于观察
     drawMouseCircle(mouseSim);
 
-//    // 3. 左键单击屏幕中心
-//    mouseSim->clickMouse(MouseSimulator::LeftButton, 960, 540);
-//    QThread::sleep(1);
+    //    // 3. 左键单击屏幕中心
+    //    mouseSim->clickMouse(MouseSimulator::LeftButton, 960, 540);
+    //    QThread::sleep(1);
 
-//    // 4. 右键单击当前位置（不指定坐标）
-//    mouseSim->clickMouse(MouseSimulator::RightButton);
-//    QThread::sleep(1);
+    //    // 4. 右键单击当前位置（不指定坐标）
+    //    mouseSim->clickMouse(MouseSimulator::RightButton);
+    //    QThread::sleep(1);
 
-//    // 5. 中键双击
-//    mouseSim->doubleClickMouse(MouseSimulator::MiddleButton, 960, 540);
-//    QThread::sleep(1);
+    //    // 5. 中键双击
+    //    mouseSim->doubleClickMouse(MouseSimulator::MiddleButton, 960, 540);
+    //    QThread::sleep(1);
 
-//    // 6. 鼠标相对移动（右移50px，下移50px）
-//    mouseSim->moveMouseRelative(50, 50);
-//    QThread::sleep(1);
+    //    // 6. 鼠标相对移动（右移50px，下移50px）
+    //    mouseSim->moveMouseRelative(50, 50);
+    //    QThread::sleep(1);
 
-//    // 7. 鼠标滚轮向下滚动2步
-//    mouseSim->scrollWheel(MouseSimulator::WheelDown, 2);
-//    QThread::sleep(1);
+    //    // 7. 鼠标滚轮向下滚动2步
+    //    mouseSim->scrollWheel(MouseSimulator::WheelDown, 2);
+    //    QThread::sleep(1);
 
     // 8. 鼠标左键按下并释放（模拟拖拽）
-//    mouseSim->pressMouse(MouseSimulator::LeftButton);
-//    QThread::msleep(500);
-//    mouseSim->moveMouseRelative(100, 0);  // 右拖100px
-//    mouseSim->releaseMouse(MouseSimulator::LeftButton);
+    //    mouseSim->pressMouse(MouseSimulator::LeftButton);
+    //    QThread::msleep(500);
+    //    mouseSim->moveMouseRelative(100, 0);  // 右拖100px
+    //    mouseSim->releaseMouse(MouseSimulator::LeftButton);
 
     qInfo() << "所有鼠标操作执行完成";
-//    app.exec();
+    //    app.exec();
+}
+
+void UintTest::test_processManager()
+{
+    int          argc   = 0;
+    char        *argv[] = {nullptr};
+    QApplication app(argc, argv);
+    try
+    {
+        ProcessMgrTest manager;
+        manager.init();
+        manager.test_processManager();
+        manager.cleanup();
+    }
+    catch (const unify::ProcessException &e)
+    {
+        std::cerr << "Process error: " << e.what() << std::endl;
+    }
+    app.exec();
+}
+
+int  g_number = 0;
+void UintTest::test_QTimer()
+{
+    int          argc   = 0;
+    char        *argv[] = {nullptr};
+    QApplication app(argc, argv);
+    qDebug() << "start" << QDateTime::currentDateTime().toString("yyMMdd-hh:mm:ss.zzz");
+    QTimer::singleShot(1000, [&g_number]() {
+        g_number = 1;
+        qDebug() << "g_number = 1" << QDateTime::currentDateTime().toString("yyMMdd-hh:mm:ss.zzz");
+    });
+    QTimer::singleShot(1000, [&g_number]() {
+        g_number = 2;
+        qDebug() << "g_number = 2" << QDateTime::currentDateTime().toString("yyMMdd-hh:mm:ss.zzz");
+    });
+    QThread::sleep(2);
+    qDebug() << "g_number=?" << QDateTime::currentDateTime().toString("yyMMdd-hh:mm:ss.zzz");
+    qDebug() << "g_number: " << QString::number(g_number);
+    app.exec();
+}
+
+void UintTest::test_QTimer2()
+{
+    int          argc   = 0;
+    char        *argv[] = {nullptr};
+    QApplication app(argc, argv);
+    QTimer      *pTimer1 = new QTimer();
+    pTimer1->setInterval(1);
+    connect(pTimer1, &QTimer::timeout, this, [&]() {
+        QThread::msleep(2);
+        g_number = 1;
+        qDebug() << "g_number = 1" << QDateTime::currentDateTime().toString("yyMMdd-hh:mm:ss.zzz");
+    });
+    pTimer1->start();
+    app.exec();
+}
+
+// 定义全局变量（仅在这个源文件中定义一次）
+QCoreApplication *g_app = nullptr;
+
+// 2. 定义全局列表 propList（缺失的关键！）
+QList<MockProp *> propList;
+
+void UintTest::test_DoubleFree()
+{
+    int              argc   = 0;
+    char            *argv[] = {nullptr};
+    QCoreApplication a(argc, argv);
+    //    g_app = &a;
+    //    Parent* p = new Parent();
+    //    // 提前注册异步回调：在1ms后触发（确保在qDeleteAll和clear()之间执行）
+    //    QTimer::singleShot(1, [p]()
+    //    {
+    //        mockDBusCallback(p);
+    //    });
+
+    //    // 执行核心逻辑
+    //    reproduceNonAtomic(p);
+
+    //    // 销毁父对象（触发子对象自动删除，导致double free）
+    //    qDebug() << "\n销毁父对象";
+    //    delete p;
+    ////    qDeleteAll(g_app->children());
+    ///
+
+    // 第一次：创建prop1（地址0x100，假设）
+    MockProp *prop1 = new MockProp();
+    propList.append(prop1);
+    qDebug() << "列表1：" << propList;  // [0x100]
+
+    // 定时清理：删除prop1，列表留野指针
+    qDeleteAll(propList);
+//    propList.clear();
+    qDebug() << "qDeleteAll后列表size：" << propList.size();  // [0x100（野指针）]
+
+    // DBus回调：创建prop2（地址0x200），加入列表
+    MockProp *prop2 = new MockProp();
+    propList.append(prop2);
+    qDebug() << "回调后列表size：" << propList.size();  // [0x100（野）, 0x200]
+
+    // clear()清空列表，prop2成游离指针
+    qDeleteAll(propList);
+    propList.clear();
+    qDebug() << "clear后列表size：" << propList.size();  // []
+
+//    // 第二次：创建prop3（系统复用0x100地址）
+//    MockProp *prop3 = new MockProp();  // 地址大概率是0x100（内存复用）
+//    propList.append(prop3);
+//    qDebug() << "列表2：" << propList.size();  // [0x100（新prop3）]
+
+//    // 再次定时清理：删除prop3（0x100）→ double free
+//    qDeleteAll(propList);  // 尝试释放0x100，但该地址已被prop1释放过
 }
 
 QTEST_APPLESS_MAIN(UintTest)

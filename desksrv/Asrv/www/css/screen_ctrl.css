@@ -161,3 +161,58 @@ h1 {
 #saveSettingsBtn:hover {
     background-color: #45a049;
 }
+
+/* 特效选项间距 */
+.mt20 {margin-top:20px;}
+/* 特效列表布局 */
+.effect-list{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+/* 单个特效按钮样式 */
+.effect-item{
+    padding: 6px 12px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    user-select: none;
+}
+/* 特效选中高亮状态 */
+.effect-item.active{
+    background: #1677ff;
+    color: #fff;
+    border-color: #1677ff;
+}
+
+/* 新增：全屏样式 */
+.canvas-fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    background-color: #000 !important;
+}
+.screen-container-fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: #000;
+}
+/* 全屏时隐藏其他元素 */
+body.fullscreen-mode .sidebar,
+body.fullscreen-mode .ratio-control,
+body.fullscreen-mode .bash,
+body.fullscreen-mode .panel-splitter,
+body.fullscreen-mode .notify-input-area,
+body.fullscreen-mode #status {
+    display: none !important;
+}
